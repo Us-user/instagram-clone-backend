@@ -1,3 +1,5 @@
+using Infrastructure;
+using Infrastructure.Data.Seed;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -5,6 +7,9 @@ var builder = WebApplication.CreateBuilder(args);
 // ── Сервисы ──────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
+// Слой данных: DbContext (PostgreSQL) + ядро Identity.
+builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddSwaggerGen(options =>
 {
@@ -24,6 +29,21 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// ── Авто-применение миграций и Seed при старте ────────────────────────────────
+// Если БД недоступна — логируем и продолжаем, чтобы приложение (и Swagger) поднялось.
+using (var scope = app.Services.CreateScope())
+{
+    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+    try
+    {
+        await DbInitializer.InitializeAsync(scope.ServiceProvider);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Не удалось применить миграции/Seed при старте (БД недоступна?)");
+    }
+}
 
 // ── Конвейер обработки запросов ───────────────────────────────────────────────
 if (app.Environment.IsDevelopment())

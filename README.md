@@ -37,10 +37,24 @@ dotnet run --project WebApi
 Swagger UI (в Development): `https://localhost:<port>/swagger`.
 
 ## Миграции (EF Core)
+Миграции и Seed применяются **автоматически при старте** приложения (`DbInitializer`),
+поэтому обычно достаточно поднять PostgreSQL и запустить проект. Вручную:
 ```bash
 dotnet ef migrations add <Name> --project Infrastructure --startup-project WebApi
 dotnet ef database update --project Infrastructure --startup-project WebApi
 ```
+
+## Тестовые аккаунты (Seed)
+При первом запуске создаются роли `Admin`/`User` и тестовые пользователи с профилями:
+
+| Логин | Пароль | Роли |
+|---|---|---|
+| `admin` | `Admin123!` | Admin, User |
+| `alice` | `User123!` | User |
+| `bob`   | `User123!` | User |
+| `carol` | `User123!` | User |
+
+Также сидируются подписки, пара постов и справочник локаций.
 
 ## Эндпоинты
 Полный список — в [`instagram-backend-prompt.md`](./instagram-backend-prompt.md)

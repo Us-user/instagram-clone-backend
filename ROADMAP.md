@@ -10,10 +10,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 2 — Слой данных (DbContext, EF-конфигурации, миграции, Seed)
-- **Последняя сессия:** 2026-07-13 (03)
-- **Следующий шаг:** Phase 2 — `DataContext : IdentityDbContext<User, IdentityRole, string>`, Fluent-конфигурации связей/индексов, начальная миграция, Seed
-- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors)
+- **Активная фаза:** Phase 3 — Сквозная инфраструктура (JWT, обработка ошибок, файлы, AutoMapper, FluentValidation, Swagger)
+- **Последняя сессия:** 2026-07-13 (04)
+- **Следующий шаг:** Phase 3 — JWT token service + Program.cs (аутентификация/авторизация), глобальный exception-middleware → `Response<T>`, file storage service, базовые профили AutoMapper, подключение FluentValidation, Swagger с Bearer, доступ к текущему юзеру из claims
+- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Миграция `InitialCreate` создана; применение к БД требует запущенного PostgreSQL.
 
 ---
 
@@ -44,11 +44,11 @@
 ## Phase 2 — Слой данных (DbContext, EF-конфигурации, миграции, Seed)
 > Цель: БД строится, наполняется тестовыми данными.
 
-- [ ] `DataContext : IdentityDbContext<User, IdentityRole, string>`
-- [ ] Fluent API: связи, каскады, индексы, уникальные ограничения
-- [ ] Начальная миграция
-- [ ] Seed: роли Admin/User + тестовые пользователи и данные
-- [ ] Авто-применение миграций и Seed при старте
+- [x] `DataContext : IdentityDbContext<User, IdentityRole, string>`
+- [x] Fluent API: связи, каскады, индексы, уникальные ограничения
+- [x] Начальная миграция (`InitialCreate`)
+- [x] Seed: роли Admin/User + тестовые пользователи и данные (`DbInitializer`)
+- [x] Авто-применение миграций и Seed при старте
 
 ## Phase 3 — Сквозная инфраструктура
 > Цель: общие сервисы, которыми пользуются все фичи.

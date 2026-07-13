@@ -1,0 +1,46 @@
+using Domain.Entities;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+
+namespace Infrastructure.Data;
+
+/// <summary>
+/// Контекст БД. Наследует <see cref="IdentityDbContext{TUser,TRole,TKey}"/>,
+/// поэтому таблицы Identity (AspNetUsers/Roles/…) создаются автоматически.
+/// Ключ пользователя — строка (<see cref="User"/> : IdentityUser&lt;string&gt;).
+/// </summary>
+public class DataContext : IdentityDbContext<User, IdentityRole, string>
+{
+    public DataContext(DbContextOptions<DataContext> options) : base(options)
+    {
+    }
+
+    public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
+
+    public DbSet<Post> Posts => Set<Post>();
+    public DbSet<PostImage> PostImages => Set<PostImage>();
+    public DbSet<PostLike> PostLikes => Set<PostLike>();
+    public DbSet<PostView> PostViews => Set<PostView>();
+    public DbSet<PostComment> PostComments => Set<PostComment>();
+    public DbSet<PostFavorite> PostFavorites => Set<PostFavorite>();
+
+    public DbSet<Story> Stories => Set<Story>();
+    public DbSet<StoryLike> StoryLikes => Set<StoryLike>();
+    public DbSet<StoryView> StoryViews => Set<StoryView>();
+
+    public DbSet<FollowingRelationShip> FollowingRelationShips => Set<FollowingRelationShip>();
+    public DbSet<Chat> Chats => Set<Chat>();
+    public DbSet<Message> Messages => Set<Message>();
+    public DbSet<Location> Locations => Set<Location>();
+    public DbSet<SearchHistory> SearchHistories => Set<SearchHistory>();
+    public DbSet<UserSearchHistory> UserSearchHistories => Set<UserSearchHistory>();
+
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        base.OnModelCreating(builder);
+
+        // Применяем все IEntityTypeConfiguration из этой сборки (Infrastructure).
+        builder.ApplyConfigurationsFromAssembly(typeof(DataContext).Assembly);
+    }
+}
