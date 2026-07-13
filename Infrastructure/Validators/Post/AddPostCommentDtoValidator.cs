@@ -13,5 +13,9 @@ public class AddPostCommentDtoValidator : AbstractValidator<AddPostCommentDto>
             .MaximumLength(1000).WithMessage("Комментарий не длиннее 1000 символов.");
 
         RuleFor(x => x.PostId).GreaterThan(0).WithMessage("Некорректный Id поста.");
+
+        RuleFor(x => x.ParentCommentId!.Value)
+            .GreaterThan(0).WithMessage("Некорректный Id родительского комментария.")
+            .When(x => x.ParentCommentId.HasValue);
     }
 }

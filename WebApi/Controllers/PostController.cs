@@ -98,11 +98,30 @@ public class PostController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
-    /// <summary>Добавить комментарий к посту.</summary>
+    /// <summary>Добавить комментарий к посту или ответ на комментарий (необязательный parentCommentId).</summary>
     [HttpPost("add-comment")]
     public async Task<IActionResult> AddComment([FromBody] AddPostCommentDto dto)
     {
         var result = await _postService.AddCommentAsync(dto);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>Тумблер лайка комментария.</summary>
+    [HttpPost("like-comment")]
+    public async Task<IActionResult> LikeComment([FromQuery] int? commentId)
+    {
+        var result = await _postService.LikeCommentAsync(commentId);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>Ответы под комментарием (2-й уровень) с пагинацией.</summary>
+    [HttpGet("get-comment-replies")]
+    public async Task<IActionResult> GetCommentReplies(
+        [FromQuery] int? commentId,
+        [FromQuery] int? pageNumber,
+        [FromQuery] int? pageSize)
+    {
+        var result = await _postService.GetCommentRepliesAsync(commentId, pageNumber, pageSize);
         return StatusCode(result.StatusCode, result);
     }
 

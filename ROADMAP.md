@@ -13,10 +13,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 14 — Комментарии: ответы (2 уровня) + лайки — **не начата**. Phase 13 (Хэштеги + Упоминания) завершена.
-- **Последняя сессия:** 2026-07-14 (17) — реализована Phase 13: сущности `Hashtag`/`PostHashtag`(M:N)/`Mention` + enum `MentionEntityType`, EF-конфигурации + DbSet'ы, `HashtagService` (парсинг `#tag` из Title/Content при add-post → upsert + инкремент `PostsCount`, декремент при delete; `search`/`get-posts-by-tag`/`get-trending`), `MentionService` (парсинг `@username` в постах/комментах → `Mention` + уведомление `Mention`, с учётом блокировок и `WhoCanMention`), `TextParsing` (regex-парсер) + `MentionEnrichment` (батч-заполнение `MentionedUsers` в DTO), проводка в `PostService` (add/delete post, add-comment) + `UserProfileService` (favorites), `HashtagController` (3 эндпоинта), миграция `AddHashtagsAndMentions`, сид хэштегов + упоминания.
-- **Следующий шаг:** начать Phase 14 — `PostComment.ParentCommentId` (2 уровня), расширить `add-comment` (parentCommentId + авто-`@username` + `Mention` + уведомление `CommentReply`), `CommentLike` + `like-comment` (+`CommentLike`), `get-comment-replies` (+блок-фильтр комментов), `repliesCount`/`likesCount`/`isLiked` в DTO коммента, миграция.
-- **Состояние сборки:** 🟢 зелёная (0 предупреждений; база 74 эндпоинта: 71 + 3 хэштега). Проверено: сборка, offline-скрипт миграции (таблицы/индексы/каскадные FK корректны), boot приложения (БД недоступна → ошибка миграции поймана, хост поднялся) + регистрация всех 3 новых маршрутов `/Hashtag/*` в Swagger. Живой smoke-тест на PostgreSQL в эту сессию не гонялся (нет доступа к `DATABASE_URL`), запускается при деплое.
+- **Активная фаза:** Phase 15 — Групповые чаты — **не начата**. Phase 14 (Комментарии: ответы + лайки) завершена.
+- **Последняя сессия:** 2026-07-14 (18) — реализована Phase 14: `PostComment.ParentCommentId` (самоссылка, каскад, макс. 2 уровня) + сущность `CommentLike`; EF-конфигурации (self-ref FK + индекс, `CommentLike` c unique `(CommentId,UserId)`) + DbSet + миграция `AddCommentRepliesAndLikes`; `CommentProjections` (переиспользуемая проекция коммента → DTO со счётчиками `repliesCount`/`likesCount`/`isLiked`); расширен `add-comment` (`parentCommentId` → анкор к родителю верхнего уровня, авто-`@username`, `Mention`, уведомление `CommentReply`); `like-comment` (тумблер + уведомление `CommentLike`), `get-comment-replies` (+блок-фильтр через `AccessGuard`); в `MentionService` добавлен `suppressNotificationUserId` (для авто-`@` ответа запись `Mention` создаётся, но `Mention`-уведомление подавляется — адресат уже получил `CommentReply`); сид: ответ bob→@admin + лайк коммента alice→admin + уведомления.
+- **Следующий шаг:** начать Phase 15 — групповые чаты: сущности `GroupChat`/`GroupChatMember`/`GroupMessage` + enum `GroupMemberRole`, системные сообщения, `GroupChatService` + SignalR-рассылка, эндпоинты `/GroupChat/*`, роли Admin/Member, миграция + сид.
+- **Состояние сборки:** 🟢 зелёная (0 предупреждений; база 76 эндпоинтов: 74 + `/Post/like-comment` + `/Post/get-comment-replies`). Проверено: сборка, offline-скрипт миграции (колонка `ParentCommentId`, self-ref FK `ON DELETE CASCADE`, таблица `CommentLikes` с 2 каскадными FK и unique-индексом — SQL корректен), boot приложения (БД недоступна → ошибка миграции поймана, хост поднялся) + регистрация обоих новых маршрутов в Swagger. Живой smoke-тест на PostgreSQL в эту сессию не гонялся (нет доступа к `DATABASE_URL`), запускается при деплое.
 
 ## ⚠️ Инварианты для всех новых фаз (не нарушать)
 1. **Обратная совместимость.** Существующие эндпоинты базы по контракту не менять — только расширять **необязательными** полями (напр. `parentCommentId`). Сохранять оригинальные опечатки контракта (`massageId`).
@@ -90,12 +90,13 @@
 - [x] В DTO объектов отдавать список упомянутых юзеров (id + username) — `MentionedUsers` в `GetPostDto`/`GetPostCommentDto`, батч-заполнение `MentionEnrichment` во всех выдачах постов (ленты/по тегу/избранное/один пост) и в add-comment
 - [x] Миграция `AddHashtagsAndMentions`; сид: хэштеги `#sunset`/`#ocean`/`#travel`/`#roadtrip`, упоминание alice→@bob (+уведомление `Mention`)
 
-## Phase 14 — Комментарии: ответы (2 уровня) + лайки · §5
-- [ ] `PostComment.ParentCommentId (int?)` — максимум 2 уровня (ответ на ответ → к тому же родителю)
-- [ ] Расширить `POST /Post/add-comment`: необязательный `parentCommentId`; авто-подстановка `@username` + `Mention` + уведомление `CommentReply`
-- [ ] Сущность `CommentLike { Id, CommentId, UserId, CreatedAt }`; `POST /Post/like-comment?commentId` (тумблер) + уведомление `CommentLike`
-- [ ] `GET /Post/get-comment-replies?commentId`; в DTO коммента: `repliesCount`, `likesCount`, `isLiked`
-- [ ] Миграция
+## Phase 14 — Комментарии: ответы (2 уровня) + лайки · §5 ✅
+- [x] `PostComment.ParentCommentId (int?)` — максимум 2 уровня (ответ на ответ → к тому же родителю верхнего уровня: `parent.ParentCommentId ?? parent.Id`). Самоссылка `ON DELETE CASCADE` (удаление верхнего коммента уносит ответы)
+- [x] Расширить `POST /Post/add-comment`: необязательный `parentCommentId`; авто-подстановка `@username` того, кому отвечаешь, в начало текста + `Mention` + уведомление `CommentReply` автору исходного коммента (пост для ответа берётся у родителя — источник истины)
+- [x] Сущность `CommentLike { Id, CommentId, UserId, CreatedAt }` (unique `(CommentId,UserId)`); `POST /Post/like-comment?commentId` (тумблер) + уведомление `CommentLike`
+- [x] `GET /Post/get-comment-replies?commentId&PageNumber&PageSize` (+блок-фильтр авторов ответов через `AccessGuard.BlockRelatedUserIds`); в DTO коммента: `parentCommentId`, `repliesCount`, `likesCount`, `isLiked` (переиспользуемая проекция `CommentProjections`)
+- [x] Миграция `AddCommentRepliesAndLikes`; сид: ответ bob→@admin + лайк коммента alice→admin + уведомления `CommentReply`/`CommentLike`
+- **Решение:** авто-`@` ответа создаёт запись `Mention` (кликабельная ссылка), но `Mention`-уведомление адресату подавляется (`suppressNotificationUserId` в `MentionService`) — он уже получает `CommentReply`, чтобы не дублировать. Ответ шлёт только `CommentReply` (не `Comment` автору поста). `CommentCount` поста по-прежнему считает все комменты, включая ответы (обратная совместимость)
 
 ## Phase 15 — Групповые чаты · §7
 > Отдельная ветка от личных 1:1 — базовые Chat/Message не трогаем.

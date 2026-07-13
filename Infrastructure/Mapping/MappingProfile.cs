@@ -49,6 +49,9 @@ public class MappingProfile : Profile
         CreateMap<PostComment, GetPostCommentDto>()
             .ForMember(d => d.UserName, o => o.Ignore())
             .ForMember(d => d.UserImage, o => o.Ignore())
+            .ForMember(d => d.RepliesCount, o => o.Ignore())
+            .ForMember(d => d.LikesCount, o => o.Ignore())
+            .ForMember(d => d.IsLiked, o => o.Ignore())
             .ForMember(d => d.MentionedUsers, o => o.Ignore());
     }
 }

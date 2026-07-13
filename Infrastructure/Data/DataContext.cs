@@ -23,6 +23,7 @@ public class DataContext : IdentityDbContext<User, IdentityRole, string>
     public DbSet<PostLike> PostLikes => Set<PostLike>();
     public DbSet<PostView> PostViews => Set<PostView>();
     public DbSet<PostComment> PostComments => Set<PostComment>();
+    public DbSet<CommentLike> CommentLikes => Set<CommentLike>();
     public DbSet<PostFavorite> PostFavorites => Set<PostFavorite>();
 
     public DbSet<Story> Stories => Set<Story>();

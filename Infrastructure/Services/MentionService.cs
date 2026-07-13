@@ -25,7 +25,8 @@ public class MentionService : IMentionService
     }
 
     public async Task ProcessMentionsAsync(
-        string? text, string authorUserId, MentionEntityType entityType, int entityId)
+        string? text, string authorUserId, MentionEntityType entityType, int entityId,
+        string? suppressNotificationUserId = null)
     {
         var usernames = TextParsing.ExtractMentions(text);
         if (usernames.Count == 0)
@@ -90,8 +91,14 @@ public class MentionService : IMentionService
 
         var notificationEntity = ToNotificationEntity(entityType);
         foreach (var userId in createdUserIds)
+        {
+            // Адресат авто-@ ответа уже получает CommentReply — второе уведомление не шлём.
+            if (userId == suppressNotificationUserId)
+                continue;
+
             await _notifications.CreateAsync(
                 userId, authorUserId, NotificationType.Mention, notificationEntity, entityId);
+        }
     }
 
     /// <summary>Маппинг типа объекта упоминания в тип объекта уведомления.</summary>

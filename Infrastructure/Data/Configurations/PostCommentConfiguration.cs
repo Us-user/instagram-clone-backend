@@ -25,6 +25,13 @@ public class PostCommentConfiguration : IEntityTypeConfiguration<PostComment>
             .HasForeignKey(c => c.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Самоссылка для ответов (Phase 14): удаление родителя каскадно уносит ответы.
+        builder.HasOne(c => c.ParentComment)
+            .WithMany(c => c.Replies)
+            .HasForeignKey(c => c.ParentCommentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.HasIndex(c => c.PostId);
+        builder.HasIndex(c => c.ParentCommentId);
     }
 }

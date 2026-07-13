@@ -84,23 +84,32 @@ public static class DbInitializer
                 CreatedAt = DateTime.UtcNow.AddMinutes(-20)
             });
 
-            // 5. Пара тестовых постов с лайком и комментарием (без изображений).
-            var alicePost = await SeedPostsAsync(context, alice, bob, admin);
+            // 5. Пара тестовых постов с лайком, комментарием, ответом и лайком коммента.
+            var (alicePost, adminComment, reply) = await SeedPostsAsync(context, alice, bob, admin);
 
             await context.SaveChangesAsync();
 
-            // 6. Упоминание (Phase 13): alice упомянула @bob в своём посте.
-            context.Mentions.Add(new Mention
-            {
-                MentionedUserId = bob.Id,
-                AuthorUserId = alice.Id,
-                EntityType = MentionEntityType.Post,
-                EntityId = alicePost.Id,
-                CreatedAt = DateTime.UtcNow.AddHours(-3)
-            });
+            // 6. Упоминания: alice→@bob в посте (Phase 13); bob→@admin в ответе на коммент (Phase 14).
+            context.Mentions.AddRange(
+                new Mention
+                {
+                    MentionedUserId = bob.Id,
+                    AuthorUserId = alice.Id,
+                    EntityType = MentionEntityType.Post,
+                    EntityId = alicePost.Id,
+                    CreatedAt = DateTime.UtcNow.AddHours(-3)
+                },
+                new Mention
+                {
+                    MentionedUserId = admin.Id,
+                    AuthorUserId = bob.Id,
+                    EntityType = MentionEntityType.Comment,
+                    EntityId = reply.Id,
+                    CreatedAt = DateTime.UtcNow.AddMinutes(-50)
+                });
 
-            // 7. Тестовые уведомления (после SaveChanges — нужны сгенерированные Id постов).
-            SeedNotifications(context, alicePost, alice, bob, admin, carol, diana);
+            // 7. Тестовые уведомления (после SaveChanges — нужны сгенерированные Id постов/комментов).
+            SeedNotifications(context, alicePost, adminComment, reply, alice, bob, admin, carol, diana);
 
             await context.SaveChangesAsync();
             logger.LogInformation("Seed: тестовые пользователи, подписки, посты, хэштеги, упоминания и уведомления созданы");
@@ -191,7 +200,8 @@ public static class DbInitializer
         await Task.CompletedTask;
     }
 
-    private static async Task<Post> SeedPostsAsync(DataContext context, User alice, User bob, User admin)
+    private static async Task<(Post AlicePost, PostComment AdminComment, PostComment Reply)> SeedPostsAsync(
+        DataContext context, User alice, User bob, User admin)
     {
         // Хэштеги (Phase 13): создаём с денормализованным PostsCount, соответствующим связям ниже.
         var now = DateTime.UtcNow;
@@ -199,6 +209,23 @@ public static class DbInitializer
         var ocean = new Hashtag { Tag = "ocean", PostsCount = 1, CreatedAt = now.AddHours(-3) };
         var travel = new Hashtag { Tag = "travel", PostsCount = 1, CreatedAt = now.AddHours(-5) };
         var roadtrip = new Hashtag { Tag = "roadtrip", PostsCount = 1, CreatedAt = now.AddHours(-5) };
+
+        // Комментарий верхнего уровня (admin) с лайком (alice) и ответом (bob) — Phase 14.
+        var adminComment = new PostComment
+        {
+            UserId = admin.Id,
+            Comment = "Красота!",
+            CreatedAt = now.AddHours(-1),
+            CommentLikes = { new CommentLike { UserId = alice.Id, CreatedAt = now.AddMinutes(-40) } }
+        };
+        var reply = new PostComment
+        {
+            UserId = bob.Id,
+            ParentComment = adminComment,
+            // Авто-@ ответа (как в рантайме); Mention на @admin проводится ниже отдельной записью.
+            Comment = "@admin полностью согласен!",
+            CreatedAt = now.AddMinutes(-50)
+        };
 
         var alicePost = new Post
         {
@@ -209,7 +236,7 @@ public static class DbInitializer
             CreatedAt = now.AddHours(-3),
             IsReel = false,
             Likes = { new PostLike { UserId = bob.Id, CreatedAt = now.AddHours(-2) } },
-            Comments = { new PostComment { UserId = admin.Id, Comment = "Красота!", CreatedAt = now.AddHours(-1) } },
+            Comments = { adminComment, reply },
             PostHashtags = { new PostHashtag { Hashtag = sunset }, new PostHashtag { Hashtag = ocean } }
         };
 
@@ -225,16 +252,18 @@ public static class DbInitializer
 
         context.Posts.AddRange(alicePost, bobReel);
         await Task.CompletedTask;
-        return alicePost;
+        return (alicePost, adminComment, reply);
     }
 
     /// <summary>
     /// Тестовые уведомления: для alice — подписки (bob, carol), лайк (bob) и комментарий (admin)
-    /// к её посту; для bob — упоминание (alice) в посте; для diana — запрос на подписку (carol).
-    /// Соответствуют засеянным связям/взаимодействиям. Правило «не себе» соблюдено.
+    /// к её посту; для bob — упоминание (alice) в посте; для admin — ответ на коммент (bob) и лайк
+    /// коммента (alice) [Phase 14]; для diana — запрос на подписку (carol). Соответствуют засеянным
+    /// связям/взаимодействиям. Правило «не себе» соблюдено.
     /// </summary>
     private static void SeedNotifications(
-        DataContext context, Post alicePost, User alice, User bob, User admin, User carol, User diana)
+        DataContext context, Post alicePost, PostComment adminComment, PostComment reply,
+        User alice, User bob, User admin, User carol, User diana)
     {
         context.Notifications.AddRange(
             new Notification
@@ -287,6 +316,28 @@ public static class DbInitializer
                 EntityId = alicePost.Id,
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow.AddHours(-3)
+            },
+            // Ответ bob → на коммент admin (Phase 14). Mention-уведомление для admin подавлено.
+            new Notification
+            {
+                RecipientUserId = admin.Id,
+                ActorUserId = bob.Id,
+                Type = NotificationType.CommentReply,
+                EntityType = NotificationEntityType.Comment,
+                EntityId = reply.Id,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow.AddMinutes(-50)
+            },
+            // Лайк коммента admin от alice (Phase 14).
+            new Notification
+            {
+                RecipientUserId = admin.Id,
+                ActorUserId = alice.Id,
+                Type = NotificationType.CommentLike,
+                EntityType = NotificationEntityType.Comment,
+                EntityId = adminComment.Id,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow.AddMinutes(-40)
             },
             // Запрос на подписку на приватный аккаунт diana от carol (Phase 12).
             new Notification

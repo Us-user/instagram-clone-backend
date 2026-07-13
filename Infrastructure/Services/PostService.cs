@@ -277,44 +277,150 @@ public class PostService : IPostService
         await _commentValidator.ValidateAndThrowAsync(dto);
 
         var currentId = _currentUser.GetRequiredUserId();
-        var ownerId = await GetPostOwnerAsync(dto.PostId);
+
+        // Пост и родитель ответа: для ответа пост берём у родителя (источник истины).
+        var postId = dto.PostId;
+        int? parentCommentId = null;
+        string? replyToUserId = null;
+        string? replyToUserName = null;
+
+        if (dto.ParentCommentId is > 0)
+        {
+            var parent = await _context.PostComments.AsNoTracking()
+                .Where(c => c.Id == dto.ParentCommentId)
+                .Select(c => new { c.Id, c.PostId, c.UserId, c.ParentCommentId, UserName = c.User!.UserName! })
+                .FirstOrDefaultAsync()
+                ?? throw new NotFoundException("Родительский комментарий не найден.");
+
+            // Максимум 2 уровня: ответ на ответ крепится к родителю верхнего уровня.
+            parentCommentId = parent.ParentCommentId ?? parent.Id;
+            postId = parent.PostId;
+            replyToUserId = parent.UserId;
+            replyToUserName = parent.UserName;
+        }
+
+        var ownerId = await GetPostOwnerAsync(postId);
+
+        // При ответе — автоподстановка @username того, кому отвечаешь, в начало текста.
+        var text = dto.Comment;
+        if (replyToUserName is not null
+            && !text.TrimStart().StartsWith($"@{replyToUserName}", StringComparison.OrdinalIgnoreCase))
+        {
+            text = $"@{replyToUserName} {text}";
+        }
 
         var comment = new PostComment
         {
-            PostId = dto.PostId,
+            PostId = postId,
+            ParentCommentId = parentCommentId,
             UserId = currentId,
-            Comment = dto.Comment,
+            Comment = text,
             CreatedAt = DateTime.UtcNow
         };
 
         _context.PostComments.Add(comment);
         await _context.SaveChangesAsync();
 
-        // Уведомление автору поста о новом комментарии («не себе» отсекается в сервисе).
-        await _notifications.CreateAsync(
-            ownerId, currentId, NotificationType.Comment, NotificationEntityType.Post, dto.PostId);
+        // Ответ → CommentReply автору исходного коммента; иначе Comment автору поста.
+        // «Не себе» отсекается внутри NotificationService.
+        if (replyToUserId is not null)
+            await _notifications.CreateAsync(
+                replyToUserId, currentId, NotificationType.CommentReply, NotificationEntityType.Comment, comment.Id);
+        else
+            await _notifications.CreateAsync(
+                ownerId, currentId, NotificationType.Comment, NotificationEntityType.Post, postId);
 
-        // Упоминания (@username) в тексте комментария → Mention + уведомление Mention.
+        // Упоминания (@username) в тексте → Mention + уведомление Mention. Для адресата ответа
+        // запись Mention создаётся (кликабельная ссылка), но его Mention-уведомление подавляем —
+        // он уже получил CommentReply.
         await _mentions.ProcessMentionsAsync(
-            comment.Comment, currentId, MentionEntityType.Comment, comment.Id);
+            comment.Comment, currentId, MentionEntityType.Comment, comment.Id,
+            suppressNotificationUserId: replyToUserId);
 
         var result = await _context.PostComments.AsNoTracking()
             .Where(c => c.Id == comment.Id)
-            .Select(c => new GetPostCommentDto
-            {
-                Id = c.Id,
-                PostId = c.PostId,
-                Comment = c.Comment,
-                CreatedAt = c.CreatedAt,
-                UserId = c.UserId,
-                UserName = c.User!.UserName!,
-                UserImage = c.User.Avatar
-            })
+            .Select(CommentProjections.ToDto(currentId))
             .FirstAsync();
 
         await MentionEnrichment.EnrichCommentsAsync(_context, new List<GetPostCommentDto> { result });
 
         return new Response<GetPostCommentDto>(result);
+    }
+
+    public async Task<Response<bool>> LikeCommentAsync(int? commentId)
+    {
+        if (commentId is null or <= 0)
+            throw new BadRequestException("Некорректный Id комментария.");
+
+        var currentId = _currentUser.GetRequiredUserId();
+
+        var comment = await _context.PostComments.AsNoTracking()
+            .Where(c => c.Id == commentId)
+            .Select(c => new { c.Id, c.UserId })
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundException("Комментарий не найден.");
+
+        var existing = await _context.CommentLikes
+            .FirstOrDefaultAsync(l => l.CommentId == commentId && l.UserId == currentId);
+
+        bool liked;
+        if (existing is not null)
+        {
+            _context.CommentLikes.Remove(existing);
+            liked = false;
+        }
+        else
+        {
+            _context.CommentLikes.Add(new CommentLike
+            {
+                CommentId = commentId.Value,
+                UserId = currentId,
+                CreatedAt = DateTime.UtcNow
+            });
+            liked = true;
+        }
+
+        await _context.SaveChangesAsync();
+
+        // Уведомление автору коммента только при постановке лайка («не себе» отсекается в сервисе).
+        if (liked)
+            await _notifications.CreateAsync(
+                comment.UserId, currentId, NotificationType.CommentLike, NotificationEntityType.Comment, comment.Id);
+
+        return new Response<bool>(liked);
+    }
+
+    public async Task<PagedResponse<List<GetPostCommentDto>>> GetCommentRepliesAsync(
+        int? commentId, int? pageNumber, int? pageSize)
+    {
+        if (commentId is null or <= 0)
+            throw new BadRequestException("Некорректный Id комментария.");
+
+        var currentId = _currentUser.GetRequiredUserId();
+        var (page, size) = Pagination.Normalize(pageNumber, pageSize);
+
+        var exists = await _context.PostComments.AnyAsync(c => c.Id == commentId);
+        if (!exists)
+            throw new NotFoundException("Комментарий не найден.");
+
+        // Скрываем ответы авторов, с которыми есть блокировка в любую сторону.
+        var blockedIds = AccessGuard.BlockRelatedUserIds(_context, currentId);
+
+        var query = _context.PostComments.AsNoTracking()
+            .Where(c => c.ParentCommentId == commentId && !blockedIds.Contains(c.UserId))
+            .OrderBy(c => c.CreatedAt);
+
+        var total = await query.CountAsync();
+
+        var replies = await query
+            .Skip((page - 1) * size)
+            .Take(size)
+            .Select(CommentProjections.ToDto(currentId))
+            .ToListAsync();
+
+        await MentionEnrichment.EnrichCommentsAsync(_context, replies);
+
+        return new PagedResponse<List<GetPostCommentDto>>(replies, total, page, size);
     }
 
     public async Task<Response<bool>> DeleteCommentAsync(int? commentId)

@@ -37,8 +37,15 @@ public interface IPostService
     /// <summary>Зафиксировать просмотр (уникально на юзера). Идемпотентно.</summary>
     Task<Response<bool>> ViewPostAsync(int? postId);
 
-    /// <summary>Добавить комментарий к посту.</summary>
+    /// <summary>Добавить комментарий к посту или ответ на комментарий (parentCommentId).</summary>
     Task<Response<GetPostCommentDto>> AddCommentAsync(AddPostCommentDto dto);
+
+    /// <summary>Тумблер лайка комментария. Возвращает новое состояние (true — лайкнут).</summary>
+    Task<Response<bool>> LikeCommentAsync(int? commentId);
+
+    /// <summary>Ответы под комментарием (2-й уровень) с пагинацией; скрывает заблокированных.</summary>
+    Task<PagedResponse<List<GetPostCommentDto>>> GetCommentRepliesAsync(
+        int? commentId, int? pageNumber, int? pageSize);
 
     /// <summary>Удалить комментарий — только автор комментария.</summary>
     Task<Response<bool>> DeleteCommentAsync(int? commentId);
