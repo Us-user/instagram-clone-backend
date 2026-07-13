@@ -110,6 +110,8 @@ public class UserProfileService : IUserProfileService
             .Select(PostProjections.ToDto(currentId))
             .ToListAsync();
 
+        await MentionEnrichment.EnrichPostsAsync(_context, posts);
+
         return new PagedResponse<List<GetPostDto>>(posts, total, page, size);
     }
 

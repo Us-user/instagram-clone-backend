@@ -89,11 +89,21 @@ public static class DbInitializer
 
             await context.SaveChangesAsync();
 
-            // 6. Тестовые уведомления (после SaveChanges — нужны сгенерированные Id постов).
+            // 6. Упоминание (Phase 13): alice упомянула @bob в своём посте.
+            context.Mentions.Add(new Mention
+            {
+                MentionedUserId = bob.Id,
+                AuthorUserId = alice.Id,
+                EntityType = MentionEntityType.Post,
+                EntityId = alicePost.Id,
+                CreatedAt = DateTime.UtcNow.AddHours(-3)
+            });
+
+            // 7. Тестовые уведомления (после SaveChanges — нужны сгенерированные Id постов).
             SeedNotifications(context, alicePost, alice, bob, admin, carol, diana);
 
             await context.SaveChangesAsync();
-            logger.LogInformation("Seed: тестовые пользователи, подписки, посты и уведомления созданы");
+            logger.LogInformation("Seed: тестовые пользователи, подписки, посты, хэштеги, упоминания и уведомления созданы");
         }
 
         // 7. Справочник локаций.
@@ -183,24 +193,34 @@ public static class DbInitializer
 
     private static async Task<Post> SeedPostsAsync(DataContext context, User alice, User bob, User admin)
     {
+        // Хэштеги (Phase 13): создаём с денормализованным PostsCount, соответствующим связям ниже.
+        var now = DateTime.UtcNow;
+        var sunset = new Hashtag { Tag = "sunset", PostsCount = 1, CreatedAt = now.AddHours(-3) };
+        var ocean = new Hashtag { Tag = "ocean", PostsCount = 1, CreatedAt = now.AddHours(-3) };
+        var travel = new Hashtag { Tag = "travel", PostsCount = 1, CreatedAt = now.AddHours(-5) };
+        var roadtrip = new Hashtag { Tag = "roadtrip", PostsCount = 1, CreatedAt = now.AddHours(-5) };
+
         var alicePost = new Post
         {
             UserId = alice.Id,
             Title = "Sunset",
-            Content = "Закат над океаном 🌅",
-            CreatedAt = DateTime.UtcNow.AddHours(-3),
+            // Текст содержит #хэштеги и @упоминание (упоминание проводится ниже отдельной записью).
+            Content = "Закат над океаном 🌅 #sunset #ocean cc @bob",
+            CreatedAt = now.AddHours(-3),
             IsReel = false,
-            Likes = { new PostLike { UserId = bob.Id, CreatedAt = DateTime.UtcNow.AddHours(-2) } },
-            Comments = { new PostComment { UserId = admin.Id, Comment = "Красота!", CreatedAt = DateTime.UtcNow.AddHours(-1) } }
+            Likes = { new PostLike { UserId = bob.Id, CreatedAt = now.AddHours(-2) } },
+            Comments = { new PostComment { UserId = admin.Id, Comment = "Красота!", CreatedAt = now.AddHours(-1) } },
+            PostHashtags = { new PostHashtag { Hashtag = sunset }, new PostHashtag { Hashtag = ocean } }
         };
 
         var bobReel = new Post
         {
             UserId = bob.Id,
             Title = "Road trip",
-            Content = "Короткое видео с дороги",
-            CreatedAt = DateTime.UtcNow.AddHours(-5),
-            IsReel = true
+            Content = "Короткое видео с дороги #travel #roadtrip",
+            CreatedAt = now.AddHours(-5),
+            IsReel = true,
+            PostHashtags = { new PostHashtag { Hashtag = travel }, new PostHashtag { Hashtag = roadtrip } }
         };
 
         context.Posts.AddRange(alicePost, bobReel);
@@ -210,8 +230,8 @@ public static class DbInitializer
 
     /// <summary>
     /// Тестовые уведомления: для alice — подписки (bob, carol), лайк (bob) и комментарий (admin)
-    /// к её посту; для diana — запрос на подписку (carol). Соответствуют засеянным
-    /// связям/взаимодействиям. Правило «не себе» соблюдено.
+    /// к её посту; для bob — упоминание (alice) в посте; для diana — запрос на подписку (carol).
+    /// Соответствуют засеянным связям/взаимодействиям. Правило «не себе» соблюдено.
     /// </summary>
     private static void SeedNotifications(
         DataContext context, Post alicePost, User alice, User bob, User admin, User carol, User diana)
@@ -256,6 +276,17 @@ public static class DbInitializer
                 EntityId = alicePost.Id,
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow.AddHours(-1)
+            },
+            // Упоминание alice → bob в посте alicePost (Phase 13).
+            new Notification
+            {
+                RecipientUserId = bob.Id,
+                ActorUserId = alice.Id,
+                Type = NotificationType.Mention,
+                EntityType = NotificationEntityType.Post,
+                EntityId = alicePost.Id,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow.AddHours(-3)
             },
             // Запрос на подписку на приватный аккаунт diana от carol (Phase 12).
             new Notification

@@ -66,6 +66,8 @@ public static class DependencyInjection
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IBlockService, BlockService>();
         services.AddScoped<ISettingsService, SettingsService>();
+        services.AddScoped<IHashtagService, HashtagService>();
+        services.AddScoped<IMentionService, MentionService>();
 
         // AutoMapper: профили из этой сборки.
         services.AddAutoMapper(typeof(MappingProfile).Assembly);

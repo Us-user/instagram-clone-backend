@@ -41,6 +41,10 @@ public class DataContext : IdentityDbContext<User, IdentityRole, string>
     public DbSet<PrivacySettings> PrivacySettings => Set<PrivacySettings>();
     public DbSet<Block> Blocks => Set<Block>();
 
+    public DbSet<Hashtag> Hashtags => Set<Hashtag>();
+    public DbSet<PostHashtag> PostHashtags => Set<PostHashtag>();
+    public DbSet<Mention> Mentions => Set<Mention>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

@@ -13,10 +13,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 13 — Хэштеги + Упоминания — **не начата**. Phase 12 (Приватность) завершена.
-- **Последняя сессия:** 2026-07-14 (16) — реализована Phase 12: `User.IsPrivate` + `PrivacySettings` (1:1), enum'ы `FollowStatus`/`WhoCanMessage`/`WhoCanMention`/`WhoCanReplyStory`, `FollowingRelationShip.Status`, 4 эндпоинта follow-requests (+уведомления `FollowRequest`/`FollowRequestAccepted`), `Block` + `BlockService` (3 эндпоинта, взаимная отписка), `SettingsService` (`/Settings/get-privacy`+`update-privacy`), приватный профиль, фильтрация блокировок/приватности в лентах/поиске/чате (`AccessGuard`), миграция `AddPrivacyAndBlocks` (backfill Accepted), сид приватного аккаунта + block.
-- **Следующий шаг:** начать Phase 13 — сущности `Hashtag`/`PostHashtag`/`Mention`, `HashtagService` (парсинг `#tag`), `MentionService` (парсинг `@username` + уведомление `Mention`, учёт `WhoCanMention`), эндпоинты `/Hashtag/*`, миграция.
-- **Состояние сборки:** 🟢 зелёная (0 предупреждений; база 71 эндпоинт: 62 + 9 приватности). Проверено: сборка, offline-скрипт миграции, boot приложения + регистрация всех 9 новых маршрутов в Swagger. Живой smoke-тест на PostgreSQL в эту сессию не гонялся (нет доступа к `DATABASE_URL`), запускается при деплое.
+- **Активная фаза:** Phase 14 — Комментарии: ответы (2 уровня) + лайки — **не начата**. Phase 13 (Хэштеги + Упоминания) завершена.
+- **Последняя сессия:** 2026-07-14 (17) — реализована Phase 13: сущности `Hashtag`/`PostHashtag`(M:N)/`Mention` + enum `MentionEntityType`, EF-конфигурации + DbSet'ы, `HashtagService` (парсинг `#tag` из Title/Content при add-post → upsert + инкремент `PostsCount`, декремент при delete; `search`/`get-posts-by-tag`/`get-trending`), `MentionService` (парсинг `@username` в постах/комментах → `Mention` + уведомление `Mention`, с учётом блокировок и `WhoCanMention`), `TextParsing` (regex-парсер) + `MentionEnrichment` (батч-заполнение `MentionedUsers` в DTO), проводка в `PostService` (add/delete post, add-comment) + `UserProfileService` (favorites), `HashtagController` (3 эндпоинта), миграция `AddHashtagsAndMentions`, сид хэштегов + упоминания.
+- **Следующий шаг:** начать Phase 14 — `PostComment.ParentCommentId` (2 уровня), расширить `add-comment` (parentCommentId + авто-`@username` + `Mention` + уведомление `CommentReply`), `CommentLike` + `like-comment` (+`CommentLike`), `get-comment-replies` (+блок-фильтр комментов), `repliesCount`/`likesCount`/`isLiked` в DTO коммента, миграция.
+- **Состояние сборки:** 🟢 зелёная (0 предупреждений; база 74 эндпоинта: 71 + 3 хэштега). Проверено: сборка, offline-скрипт миграции (таблицы/индексы/каскадные FK корректны), boot приложения (БД недоступна → ошибка миграции поймана, хост поднялся) + регистрация всех 3 новых маршрутов `/Hashtag/*` в Swagger. Живой smoke-тест на PostgreSQL в эту сессию не гонялся (нет доступа к `DATABASE_URL`), запускается при деплое.
 
 ## ⚠️ Инварианты для всех новых фаз (не нарушать)
 1. **Обратная совместимость.** Существующие эндпоинты базы по контракту не менять — только расширять **необязательными** полями (напр. `parentCommentId`). Сохранять оригинальные опечатки контракта (`massageId`).
@@ -81,14 +81,14 @@
 - [x] **Фильтрация блокировок/приватности** в существующих выдачах через `AccessGuard`: лента (`get-posts`/`get-reels`/`get-following-post`/`get-post-by-id`), поиск (`get-users`), чат (create + send-message). Список комментов ещё не отдаётся отдельным эндпоинтом (только счётчик) — фильтр применится вместе с `get-comment-replies` в Phase 14
 - [x] Миграция `AddPrivacyAndBlocks` + сид: приватный аккаунт `diana`, pending-запрос `carol→diana`, block `bob→carol`
 
-## Phase 13 — Хэштеги + Упоминания · §3, §4
-- [ ] Сущности `Hashtag { Id, Tag(unique,lowercase), PostsCount, CreatedAt }`, `PostHashtag { Id, PostId, HashtagId }` (M:N)
-- [ ] Сущность `Mention { Id, MentionedUserId, AuthorUserId, EntityType(Post/Comment/StoryReply), EntityId, CreatedAt }`
-- [ ] `HashtagService`: парсинг `#tag` из Title/Content при add/edit поста → нормализация, upsert, инкремент `PostsCount`; декремент при удалении поста
-- [ ] `MentionService`: парсинг `@username` при сохранении поста/коммента/ответа на сторис → `Mention` + уведомление `Mention`; учитывать `WhoCanMention`
-- [ ] Эндпоинты Hashtag: `GET /Hashtag/search`, `GET /Hashtag/get-posts-by-tag?tag`, `GET /Hashtag/get-trending`
-- [ ] В DTO объектов отдавать список упомянутых юзеров (id + username) для кликабельных ссылок
-- [ ] Миграция
+## Phase 13 — Хэштеги + Упоминания · §3, §4 ✅
+- [x] Сущности `Hashtag { Id, Tag(unique,lowercase), PostsCount, CreatedAt }`, `PostHashtag { Id, PostId, HashtagId }` (M:N)
+- [x] Сущность `Mention { Id, MentionedUserId, AuthorUserId, EntityType(enum `MentionEntityType`: Post/Comment/StoryReply), EntityId, CreatedAt }` (пара `(MentionedUserId, EntityType, EntityId)` уникальна)
+- [x] `HashtagService`: парсинг `#tag` из Title/Content при add поста → нормализация (lowercase), upsert, инкремент `PostsCount`; декремент + снятие связей при удалении поста. (Edit-эндпоинта в базе нет — правка появится вместе с ним)
+- [x] `MentionService`: парсинг `@username` при сохранении поста/коммента → `Mention` + уведомление `Mention`; блок-проверка + учёт `WhoCanMention` (Everyone/Followers/Nobody); собственные упоминания игнорируются. (StoryReply-проводка — в Phase 17)
+- [x] Эндпоинты Hashtag: `GET /Hashtag/search`, `GET /Hashtag/get-posts-by-tag?tag` (с `VisibleTo`-фильтром блок/приват), `GET /Hashtag/get-trending` (за 7 дней)
+- [x] В DTO объектов отдавать список упомянутых юзеров (id + username) — `MentionedUsers` в `GetPostDto`/`GetPostCommentDto`, батч-заполнение `MentionEnrichment` во всех выдачах постов (ленты/по тегу/избранное/один пост) и в add-comment
+- [x] Миграция `AddHashtagsAndMentions`; сид: хэштеги `#sunset`/`#ocean`/`#travel`/`#roadtrip`, упоминание alice→@bob (+уведомление `Mention`)
 
 ## Phase 14 — Комментарии: ответы (2 уровня) + лайки · §5
 - [ ] `PostComment.ParentCommentId (int?)` — максимум 2 уровня (ответ на ответ → к тому же родителю)

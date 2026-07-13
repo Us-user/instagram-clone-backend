@@ -16,4 +16,5 @@ public class Post
     public List<PostComment> Comments { get; set; } = new();
     public List<PostView> Views { get; set; } = new();
     public List<PostFavorite> Favorites { get; set; } = new();
+    public List<PostHashtag> PostHashtags { get; set; } = new();
 }

@@ -1,3 +1,5 @@
+using Domain.DTOs.Mention;
+
 namespace Domain.DTOs.Post;
 
 /// <summary>Пост для чтения: поля + счётчики + флаги текущего юзера.</summary>
@@ -24,4 +26,7 @@ public class GetPostDto
 
     /// <summary>В избранном ли у текущего пользователя.</summary>
     public bool IsFavorite { get; set; }
+
+    /// <summary>Упомянутые (@username) в посте юзеры для кликабельных ссылок (Phase 13).</summary>
+    public List<MentionedUserDto> MentionedUsers { get; set; } = new();
 }

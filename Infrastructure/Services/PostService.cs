@@ -22,6 +22,8 @@ public class PostService : IPostService
     private readonly ICurrentUserService _currentUser;
     private readonly IFileService _fileService;
     private readonly INotificationService _notifications;
+    private readonly IHashtagService _hashtags;
+    private readonly IMentionService _mentions;
     private readonly IValidator<AddPostCommentDto> _commentValidator;
     private readonly IValidator<AddPostFavoriteDto> _favoriteValidator;
 
@@ -30,6 +32,8 @@ public class PostService : IPostService
         ICurrentUserService currentUser,
         IFileService fileService,
         INotificationService notifications,
+        IHashtagService hashtags,
+        IMentionService mentions,
         IValidator<AddPostCommentDto> commentValidator,
         IValidator<AddPostFavoriteDto> favoriteValidator)
     {
@@ -37,6 +41,8 @@ public class PostService : IPostService
         _currentUser = currentUser;
         _fileService = fileService;
         _notifications = notifications;
+        _hashtags = hashtags;
+        _mentions = mentions;
         _commentValidator = commentValidator;
         _favoriteValidator = favoriteValidator;
     }
@@ -90,6 +96,8 @@ public class PostService : IPostService
             .FirstOrDefaultAsync()
             ?? throw new NotFoundException("Пост не найден.");
 
+        await MentionEnrichment.EnrichPostsAsync(_context, new List<GetPostDto> { post });
+
         return new Response<GetPostDto>(post);
     }
 
@@ -102,6 +110,8 @@ public class PostService : IPostService
             .OrderByDescending(p => p.CreatedAt)
             .Select(PostProjections.ToDto(currentId))
             .ToListAsync();
+
+        await MentionEnrichment.EnrichPostsAsync(_context, posts);
 
         return new Response<List<GetPostDto>>(posts);
     }
@@ -153,10 +163,17 @@ public class PostService : IPostService
         _context.Posts.Add(post);
         await _context.SaveChangesAsync();
 
+        // Хэштеги и упоминания разбираем после сохранения — нужен сгенерированный Id поста.
+        await _hashtags.ProcessPostHashtagsAsync(post.Id, post.Title, post.Content);
+        await _mentions.ProcessMentionsAsync(
+            $"{post.Title} {post.Content}", currentId, MentionEntityType.Post, post.Id);
+
         var result = await _context.Posts.AsNoTracking()
             .Where(p => p.Id == post.Id)
             .Select(PostProjections.ToDto(currentId))
             .FirstAsync();
+
+        await MentionEnrichment.EnrichPostsAsync(_context, new List<GetPostDto> { result });
 
         return new Response<GetPostDto>(result);
     }
@@ -178,6 +195,9 @@ public class PostService : IPostService
 
         // Имена файлов собираем до удаления; каскады EF уберут PostImage/Like/View/etc из БД.
         var imageNames = post.Images.Select(i => i.ImageName).ToList();
+
+        // Снимаем связи с хэштегами и декрементим их счётчики до удаления поста.
+        await _hashtags.RemovePostHashtagsAsync(post.Id);
 
         _context.Posts.Remove(post);
         await _context.SaveChangesAsync();
@@ -274,6 +294,10 @@ public class PostService : IPostService
         await _notifications.CreateAsync(
             ownerId, currentId, NotificationType.Comment, NotificationEntityType.Post, dto.PostId);
 
+        // Упоминания (@username) в тексте комментария → Mention + уведомление Mention.
+        await _mentions.ProcessMentionsAsync(
+            comment.Comment, currentId, MentionEntityType.Comment, comment.Id);
+
         var result = await _context.PostComments.AsNoTracking()
             .Where(c => c.Id == comment.Id)
             .Select(c => new GetPostCommentDto
@@ -287,6 +311,8 @@ public class PostService : IPostService
                 UserImage = c.User.Avatar
             })
             .FirstAsync();
+
+        await MentionEnrichment.EnrichCommentsAsync(_context, new List<GetPostCommentDto> { result });
 
         return new Response<GetPostCommentDto>(result);
     }
@@ -343,7 +369,7 @@ public class PostService : IPostService
     }
 
     /// <summary>Пагинированная материализация запроса постов через общую проекцию в DTO.</summary>
-    private static async Task<PagedResponse<List<GetPostDto>>> ToPagedAsync(
+    private async Task<PagedResponse<List<GetPostDto>>> ToPagedAsync(
         IQueryable<Post> query, string currentId, int page, int size)
     {
         var total = await query.CountAsync();
@@ -353,6 +379,8 @@ public class PostService : IPostService
             .Take(size)
             .Select(PostProjections.ToDto(currentId))
             .ToListAsync();
+
+        await MentionEnrichment.EnrichPostsAsync(_context, posts);
 
         return new PagedResponse<List<GetPostDto>>(posts, total, page, size);
     }
