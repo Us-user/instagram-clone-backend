@@ -10,10 +10,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 9 — Локации и поиск
-- **Последняя сессия:** 2026-07-13 (10)
-- **Следующий шаг:** Phase 9 — `LocationService` + `LocationController`: `get-Locations` (фильтр City/State/ZipCode/Country + пагинация `PagedResponse<T>`), `get-Location-by-id?id`, `add-Location` (body `AddLocationDto`, все поля required), `update-Location` (body `UpdateLocationDto` с `locationId`), `delete-Location?id`. DTO `AddLocationDto`/`UpdateLocationDto`/`GetLocationDto` уже в Domain; добавить FluentValidation-валидаторы. Затем ревизия search-history эндпоинтов User (Phase 5).
-- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Phase 8 завершена: 6 эндпоинтов `Chat` видны в swagger с дословными путями контракта (`get-chats`, `get-chat-by-id`, `create-chat`, `send-message`, `delete-message`, `delete-chat`), опечатка `massageId` сохранена, `send-message` — `PUT` + `multipart/form-data` (ChatId/MessageText/File); все защищённые возвращают 401 без токена. SignalR-хаб `/chatHub` смонтирован и требует авторизации (negotiate без токена → 401); токен для хаба принимается из query `access_token` (WebSocket). Слои разделены: абстракция `IChatNotifier` в Infrastructure, реализация `ChatNotifier` поверх `IHubContext<ChatHub, IChatClient>` + `CustomUserIdProvider` (адресация по claim `userId`) — в WebApi. Проекции чата вынесены в `ChatProjections`. DB-пути требуют запущенного PostgreSQL (авто-миграция при старте корректно ловится).
+- **Активная фаза:** Phase 10 — Качество, харденинг и документация
+- **Последняя сессия:** 2026-07-13 (11)
+- **Следующий шаг:** Phase 10 — финальный аудит: авторизация владельца по всем ресурсам (посты/комменты/сторис/сообщения), пагинация везде, где есть PageNumber/PageSize, ревизия сообщений валидации, проверка глобальной обработки ошибок; полный README (setup, миграции, connection string, `dotnet run`, список эндпоинтов); ручной smoke-тест всех групп эндпоинтов на живом PostgreSQL; финальная сборка без предупреждений.
+- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Phase 9 завершена: 5 эндпоинтов `Location` видны в swagger с дословными путями контракта (`get-Locations`, `get-Location-by-id`, `add-Location`, `update-Location`, `delete-Location`), все защищённые возвращают 401 без токена. `get-Locations` — фильтр City/State/ZipCode/Country (partial, case-insensitive) + `PagedResponse<T>`; тела `add`/`update` валидируются существующими FluentValidation-валидаторами (`ValidateAndThrowAsync`), нормализация полей `Trim()`. `update-Location` находит сущность по `LocationId`, `get-Location-by-id`/`delete-Location` — по query `id` (nullable + guard). Локации без владельца — CRUD доступен любому авторизованному юзеру. Также подтверждено: все 8 search-history эндпоинтов User (Phase 5) присутствуют в `UserController` с дословными путями. DB-пути требуют запущенного PostgreSQL (авто-миграция при старте корректно ловится).
 
 ---
 
@@ -101,8 +101,8 @@
 ## Phase 9 — Локации и поиск
 > Цель: справочник локаций (независимая фича).
 
-- [ ] Location CRUD + фильтр/пагинация (`get-Locations`, `get-Location-by-id`, `add`, `update`, `delete`)
-- [ ] Проверить, что все search-history эндпоинты User завершены (Phase 5)
+- [x] Location CRUD + фильтр/пагинация (`get-Locations`, `get-Location-by-id`, `add`, `update`, `delete`)
+- [x] Проверить, что все search-history эндпоинты User завершены (Phase 5)
 
 ## Phase 10 — Качество, харденинг и документация
 > Цель: production-ready, всё проверено и задокументировано.
