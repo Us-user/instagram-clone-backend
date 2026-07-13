@@ -56,6 +56,9 @@ public class PostService : IPostService
         if (!string.IsNullOrWhiteSpace(content))
             query = query.Where(p => p.Content != null && p.Content.ToLower().Contains(content.ToLower()));
 
+        // Скрываем посты заблокированных (в обе стороны) и приватных без одобренной подписки.
+        query = query.VisibleTo(_context, currentId);
+
         return await ToPagedAsync(query.OrderByDescending(p => p.CreatedAt), currentId, page, size);
     }
 
@@ -66,6 +69,7 @@ public class PostService : IPostService
 
         var query = _context.Posts.AsNoTracking()
             .Where(p => p.IsReel)
+            .VisibleTo(_context, currentId)
             .OrderByDescending(p => p.CreatedAt);
 
         return await ToPagedAsync(query, currentId, page, size);
@@ -78,8 +82,10 @@ public class PostService : IPostService
 
         var currentId = _currentUser.GetRequiredUserId();
 
+        // Скрытый по блокировке/приватности пост недоступен так же, как несуществующий.
         var post = await _context.Posts.AsNoTracking()
             .Where(p => p.Id == id)
+            .VisibleTo(_context, currentId)
             .Select(PostProjections.ToDto(currentId))
             .FirstOrDefaultAsync()
             ?? throw new NotFoundException("Пост не найден.");
@@ -116,6 +122,7 @@ public class PostService : IPostService
 
         var query = _context.Posts.AsNoTracking()
             .Where(p => followingIds.Contains(p.UserId))
+            .VisibleTo(_context, currentId)
             .OrderByDescending(p => p.CreatedAt);
 
         return await ToPagedAsync(query, currentId, page, size);

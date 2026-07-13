@@ -1,6 +1,7 @@
 using Domain.DTOs.Post;
 using Domain.DTOs.UserProfile;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Exceptions;
 using Domain.Responses;
 using FluentValidation;
@@ -41,6 +42,11 @@ public class UserProfileService : IUserProfileService
             throw new BadRequestException("Id пользователя обязателен.");
 
         var currentId = _currentUser.GetRequiredUserId();
+
+        // Заблокированному (в любую сторону) профиль не показываем — скрываем его существование.
+        if (id != currentId && await AccessGuard.IsBlockBetweenAsync(_context, id, currentId))
+            throw new NotFoundException("Профиль не найден.");
+
         var dto = await BuildProfileDtoAsync(id, currentId);
         return new Response<GetUserProfileDto>(dto);
     }
@@ -52,8 +58,11 @@ public class UserProfileService : IUserProfileService
 
         var currentId = _currentUser.GetRequiredUserId();
 
+        // «Подписан» = одобренная связь (Pending-запрос ещё не даёт подписки).
         var isFollowing = await _context.FollowingRelationShips
-            .AnyAsync(f => f.UserId == currentId && f.FollowingUserId == followingUserId);
+            .AnyAsync(f => f.UserId == currentId
+                && f.FollowingUserId == followingUserId
+                && f.Status == FollowStatus.Accepted);
 
         return new Response<bool>(isFollowing);
     }
@@ -164,13 +173,23 @@ public class UserProfileService : IUserProfileService
             About = profile.About,
             Gender = profile.Gender,
             Image = profile.Image,
+            IsPrivate = profile.User.IsPrivate,
+            // Счётчики видны и на приватном чужом профиле (сам контент — через свои эндпоинты).
             PostCount = await _context.Posts.CountAsync(p => p.UserId == userId),
-            FollowersCount = await _context.FollowingRelationShips.CountAsync(f => f.FollowingUserId == userId),
-            FollowingCount = await _context.FollowingRelationShips.CountAsync(f => f.UserId == userId),
+            FollowersCount = await _context.FollowingRelationShips
+                .CountAsync(f => f.FollowingUserId == userId && f.Status == FollowStatus.Accepted),
+            FollowingCount = await _context.FollowingRelationShips
+                .CountAsync(f => f.UserId == userId && f.Status == FollowStatus.Accepted),
             // На себя подписаться нельзя — для собственного профиля всегда false.
             IsFollowing = userId != currentId
                 && await _context.FollowingRelationShips
-                    .AnyAsync(f => f.UserId == currentId && f.FollowingUserId == userId)
+                    .AnyAsync(f => f.UserId == currentId && f.FollowingUserId == userId
+                        && f.Status == FollowStatus.Accepted),
+            // Отправлен ли текущим пользователем ещё не одобренный запрос на подписку.
+            IsRequested = userId != currentId
+                && await _context.FollowingRelationShips
+                    .AnyAsync(f => f.UserId == currentId && f.FollowingUserId == userId
+                        && f.Status == FollowStatus.Pending)
         };
     }
 }

@@ -25,7 +25,15 @@ public class FollowingRelationShipConfiguration : IEntityTypeConfiguration<Follo
             .HasForeignKey(f => f.FollowingUserId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Status всегда пишется сервисом явно (Pending/Accepted), поэтому НЕ задаём
+        // model-level default: с ним EF считал бы CLR-default (Pending=0) «неустановленным»
+        // и подменял его на store-default при вставке запроса на подписку. Существующим
+        // строкам базы значение Accepted проставляется в самой миграции (backfill).
+
         // Нельзя подписаться на одного и того же пользователя дважды.
         builder.HasIndex(f => new { f.UserId, f.FollowingUserId }).IsUnique();
+
+        // Быстрый разбор входящих запросов на подписку у владельца приватного аккаунта.
+        builder.HasIndex(f => new { f.FollowingUserId, f.Status });
     }
 }

@@ -30,8 +30,16 @@ public class User : IdentityUser<string>
     /// </summary>
     public bool IsVerified { get; set; }
 
+    /// <summary>
+    /// Приватный ли аккаунт (Phase 12). Быстрый флаг для проверок в лентах/подписках;
+    /// источник истины — <see cref="PrivacySettings"/>, с которым синхронизируется.
+    /// Новые подписки на приватный аккаунт идут через запрос (<see cref="Enums.FollowStatus.Pending"/>).
+    /// </summary>
+    public bool IsPrivate { get; set; }
+
     // Навигации
     public UserProfile? UserProfile { get; set; }
+    public PrivacySettings? PrivacySettings { get; set; }
     public List<Post> Posts { get; set; } = new();
     public List<PostLike> PostLikes { get; set; } = new();
     public List<PostView> PostViews { get; set; } = new();

@@ -38,6 +38,9 @@ public class DataContext : IdentityDbContext<User, IdentityRole, string>
 
     public DbSet<Notification> Notifications => Set<Notification>();
 
+    public DbSet<PrivacySettings> PrivacySettings => Set<PrivacySettings>();
+    public DbSet<Block> Blocks => Set<Block>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

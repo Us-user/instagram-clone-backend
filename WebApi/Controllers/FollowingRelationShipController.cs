@@ -47,4 +47,37 @@ public class FollowingRelationShipController : ControllerBase
         var result = await _service.DeleteAsync(followingUserId);
         return StatusCode(result.StatusCode, result);
     }
+
+    /// <summary>Входящие запросы на подписку (Pending) к текущему пользователю (приватный аккаунт).</summary>
+    [HttpGet("get-follow-requests")]
+    public async Task<IActionResult> GetFollowRequests(
+        [FromQuery] int? pageNumber, [FromQuery] int? pageSize)
+    {
+        var result = await _service.GetFollowRequestsAsync(pageNumber, pageSize);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>Принять запрос на подписку от requesterUserId (+ уведомление об одобрении).</summary>
+    [HttpPost("accept-request")]
+    public async Task<IActionResult> AcceptRequest([FromQuery] string? requesterUserId)
+    {
+        var result = await _service.AcceptRequestAsync(requesterUserId);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>Отклонить запрос на подписку от requesterUserId.</summary>
+    [HttpPost("decline-request")]
+    public async Task<IActionResult> DeclineRequest([FromQuery] string? requesterUserId)
+    {
+        var result = await _service.DeclineRequestAsync(requesterUserId);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>Отменить свой исходящий запрос на подписку к followingUserId.</summary>
+    [HttpDelete("cancel-request")]
+    public async Task<IActionResult> CancelRequest([FromQuery] string? followingUserId)
+    {
+        var result = await _service.CancelRequestAsync(followingUserId);
+        return StatusCode(result.StatusCode, result);
+    }
 }

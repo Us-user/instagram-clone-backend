@@ -36,9 +36,14 @@ public class UserService : IUserService
     public async Task<PagedResponse<List<GetUserDto>>> GetUsersAsync(
         string? userName, string? email, int? pageNumber, int? pageSize)
     {
+        var currentId = _currentUser.GetRequiredUserId();
         var (page, size) = Pagination.Normalize(pageNumber, pageSize);
 
-        var query = _context.Users.AsNoTracking().AsQueryable();
+        // Скрываем пользователей, с которыми есть блокировка в любую сторону.
+        var blockRelatedIds = AccessGuard.BlockRelatedUserIds(_context, currentId);
+
+        var query = _context.Users.AsNoTracking()
+            .Where(u => !blockRelatedIds.Contains(u.Id));
 
         if (!string.IsNullOrWhiteSpace(userName))
         {

@@ -1,3 +1,5 @@
+using Domain.Enums;
+
 namespace Domain.Entities;
 
 /// <summary>
@@ -12,6 +14,14 @@ public class FollowingRelationShip
 
     /// <summary>На кого подписан.</summary>
     public string FollowingUserId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Статус подписки (Phase 12). На публичный аккаунт — сразу <see cref="FollowStatus.Accepted"/>,
+    /// на приватный — <see cref="FollowStatus.Pending"/> до одобрения владельцем. Существующие
+    /// связи базы после миграции считаются <see cref="FollowStatus.Accepted"/> (default столбца).
+    /// </summary>
+    public FollowStatus Status { get; set; } = FollowStatus.Accepted;
+
     public DateTime CreatedAt { get; set; }
 
     public User? User { get; set; }

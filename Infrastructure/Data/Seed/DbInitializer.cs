@@ -56,11 +56,33 @@ public static class DbInitializer
                 "carol", "Carol Reed", "carol@instaclone.dev", "User123!", Gender.Female,
                 null, new[] { UserRole });
 
+            // Приватный аккаунт (Phase 12): новые подписки идут через запрос.
+            var diana = await CreateUserAsync(context, userManager, logger,
+                "diana", "Diana Prince", "diana@instaclone.dev", "User123!", Gender.Female,
+                "Приватный аккаунт. Подписки — по запросу.", new[] { UserRole }, isPrivate: true);
+
             await context.SaveChangesAsync();
 
-            // 4. Подписки: alice → admin, bob; bob → alice; carol → alice.
+            // 4. Подписки: alice → admin, bob; bob → alice; carol → alice (все одобренные).
             await SeedFollowsAsync(context,
                 (alice, admin), (alice, bob), (bob, alice), (carol, alice));
+
+            // 4b. Запрос на подписку на приватный аккаунт: carol → diana (Pending).
+            context.FollowingRelationShips.Add(new FollowingRelationShip
+            {
+                UserId = carol.Id,
+                FollowingUserId = diana.Id,
+                Status = FollowStatus.Pending,
+                CreatedAt = DateTime.UtcNow.AddMinutes(-30)
+            });
+
+            // 4c. Пример блокировки (Phase 12): bob заблокировал carol.
+            context.Blocks.Add(new Block
+            {
+                BlockerUserId = bob.Id,
+                BlockedUserId = carol.Id,
+                CreatedAt = DateTime.UtcNow.AddMinutes(-20)
+            });
 
             // 5. Пара тестовых постов с лайком и комментарием (без изображений).
             var alicePost = await SeedPostsAsync(context, alice, bob, admin);
@@ -68,7 +90,7 @@ public static class DbInitializer
             await context.SaveChangesAsync();
 
             // 6. Тестовые уведомления (после SaveChanges — нужны сгенерированные Id постов).
-            SeedNotifications(context, alicePost, alice, bob, admin, carol);
+            SeedNotifications(context, alicePost, alice, bob, admin, carol, diana);
 
             await context.SaveChangesAsync();
             logger.LogInformation("Seed: тестовые пользователи, подписки, посты и уведомления созданы");
@@ -99,14 +121,16 @@ public static class DbInitializer
         string password,
         Gender gender,
         string? about,
-        string[] roles)
+        string[] roles,
+        bool isPrivate = false)
     {
         var user = new User
         {
             UserName = userName,
             Email = email,
             EmailConfirmed = true,
-            FullName = fullName
+            FullName = fullName,
+            IsPrivate = isPrivate
         };
 
         var result = await userManager.CreateAsync(user, password);
@@ -125,6 +149,16 @@ public static class DbInitializer
             Gender = gender,
             About = about
         });
+
+        // Для приватного аккаунта фиксируем настройки приватности (источник истины).
+        if (isPrivate)
+        {
+            context.PrivacySettings.Add(new PrivacySettings
+            {
+                UserId = user.Id,
+                IsPrivate = true
+            });
+        }
 
         logger.LogInformation("Seed: создан пользователь {UserName}", userName);
         return user;
@@ -175,11 +209,12 @@ public static class DbInitializer
     }
 
     /// <summary>
-    /// Тестовые уведомления для alice: подписки (bob, carol), лайк (bob) и комментарий (admin)
-    /// к её посту — соответствуют засеянным связям/взаимодействиям. Правило «не себе» соблюдено.
+    /// Тестовые уведомления: для alice — подписки (bob, carol), лайк (bob) и комментарий (admin)
+    /// к её посту; для diana — запрос на подписку (carol). Соответствуют засеянным
+    /// связям/взаимодействиям. Правило «не себе» соблюдено.
     /// </summary>
     private static void SeedNotifications(
-        DataContext context, Post alicePost, User alice, User bob, User admin, User carol)
+        DataContext context, Post alicePost, User alice, User bob, User admin, User carol, User diana)
     {
         context.Notifications.AddRange(
             new Notification
@@ -221,6 +256,17 @@ public static class DbInitializer
                 EntityId = alicePost.Id,
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow.AddHours(-1)
+            },
+            // Запрос на подписку на приватный аккаунт diana от carol (Phase 12).
+            new Notification
+            {
+                RecipientUserId = diana.Id,
+                ActorUserId = carol.Id,
+                Type = NotificationType.FollowRequest,
+                EntityType = NotificationEntityType.User,
+                EntityId = null,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow.AddMinutes(-30)
             });
     }
 }

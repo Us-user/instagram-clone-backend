@@ -18,5 +18,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.IsVerified)
             .HasDefaultValue(false);
+
+        builder.Property(u => u.IsPrivate)
+            .HasDefaultValue(false);
     }
 }

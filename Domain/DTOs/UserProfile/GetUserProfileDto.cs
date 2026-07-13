@@ -17,6 +17,15 @@ public class GetUserProfileDto
     public int FollowersCount { get; set; }
     public int FollowingCount { get; set; }
 
-    /// <summary>Подписан ли текущий пользователь на этот профиль.</summary>
+    /// <summary>Подписан ли текущий пользователь на этот профиль (одобренная подписка).</summary>
     public bool IsFollowing { get; set; }
+
+    /// <summary>Приватный ли аккаунт (Phase 12). Для приватного чужого профиля контент скрыт.</summary>
+    public bool IsPrivate { get; set; }
+
+    /// <summary>
+    /// Отправлен ли текущим пользователем запрос на подписку, ожидающий одобрения
+    /// (кнопка «Запрос отправлен» для приватного профиля).
+    /// </summary>
+    public bool IsRequested { get; set; }
 }

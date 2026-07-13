@@ -13,10 +13,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 12 — Приватность (приватные аккаунты, follow requests, блокировки, настройки) — **не начата**. Phase 11 (Уведомления) завершена.
-- **Последняя сессия:** 2026-07-14 (15) — реализована Phase 11: `Notification` + enum'ы, `NotificationService` с группировкой, `NotificationHub` (SignalR), 5 эндпоинтов `/Notification/*`, проводка Like/Comment/Follow, поле `User.IsVerified`, миграция `AddNotifications`, сид-уведомления.
-- **Следующий шаг:** начать Phase 12 — `User.IsPrivate` + `PrivacySettings`, `FollowingRelationShip.Status (Pending/Accepted)`, follow requests, сущность `Block` + `BlockService`, приватный профиль, `/Settings/*`, фильтрация блокировок в существующих выдачах, миграция.
-- **Состояние сборки:** 🟢 зелёная (0 предупреждений; база 62 эндпоинта: 57 + 5 уведомлений). Живой smoke-тест на PostgreSQL в эту сессию не гонялся (нет доступа к `DATABASE_URL`), запускается при деплое.
+- **Активная фаза:** Phase 13 — Хэштеги + Упоминания — **не начата**. Phase 12 (Приватность) завершена.
+- **Последняя сессия:** 2026-07-14 (16) — реализована Phase 12: `User.IsPrivate` + `PrivacySettings` (1:1), enum'ы `FollowStatus`/`WhoCanMessage`/`WhoCanMention`/`WhoCanReplyStory`, `FollowingRelationShip.Status`, 4 эндпоинта follow-requests (+уведомления `FollowRequest`/`FollowRequestAccepted`), `Block` + `BlockService` (3 эндпоинта, взаимная отписка), `SettingsService` (`/Settings/get-privacy`+`update-privacy`), приватный профиль, фильтрация блокировок/приватности в лентах/поиске/чате (`AccessGuard`), миграция `AddPrivacyAndBlocks` (backfill Accepted), сид приватного аккаунта + block.
+- **Следующий шаг:** начать Phase 13 — сущности `Hashtag`/`PostHashtag`/`Mention`, `HashtagService` (парсинг `#tag`), `MentionService` (парсинг `@username` + уведомление `Mention`, учёт `WhoCanMention`), эндпоинты `/Hashtag/*`, миграция.
+- **Состояние сборки:** 🟢 зелёная (0 предупреждений; база 71 эндпоинт: 62 + 9 приватности). Проверено: сборка, offline-скрипт миграции, boot приложения + регистрация всех 9 новых маршрутов в Swagger. Живой smoke-тест на PostgreSQL в эту сессию не гонялся (нет доступа к `DATABASE_URL`), запускается при деплое.
 
 ## ⚠️ Инварианты для всех новых фаз (не нарушать)
 1. **Обратная совместимость.** Существующие эндпоинты базы по контракту не менять — только расширять **необязательными** полями (напр. `parentCommentId`). Сохранять оригинальные опечатки контракта (`massageId`).
@@ -66,20 +66,20 @@
 - [x] Проводка существующих действий: уведомления `Like` (лайк поста), `Comment`, `Follow` — из `PostService`/`FollowingRelationShipService`
 - [x] Регистрация в DI (`INotificationService`, `INotificationNotifier`). AutoMapper-профиль и валидаторы не потребовались: DTO собирается вручную (кастомная группировка, как в `ChatService`), входные параметры — только query
 
-## Phase 12 — Приватность: приватные аккаунты, follow requests, блокировка, настройки · §6
+## Phase 12 — Приватность: приватные аккаунты, follow requests, блокировка, настройки · §6 ✅
 > Кросс-срезовый фундамент для упоминаний, чата, сторис, explore.
 
-- [ ] `User.IsPrivate` + сущность `PrivacySettings { Id, UserId(1:1), IsPrivate, ShowOnlineStatus, WhoCanMessage, WhoCanMention, WhoCanReplyStory }` (источник истины — `PrivacySettings`, синхронизация с User)
-- [ ] Enum'ы `WhoCanMessage/WhoCanMention {Everyone, Followers, Nobody}`, `WhoCanReplyStory {Everyone, Followers, CloseFriends, Nobody}`
-- [ ] `FollowingRelationShip.Status (enum: Pending=0, Accepted=1)`; подписка на публичный → `Accepted`, на приватный → `Pending` + уведомление `FollowRequest`
-- [ ] Follow requests: `GET /FollowingRelationShip/get-follow-requests`, `POST /accept-request?requesterUserId` (+`FollowRequestAccepted`), `POST /decline-request?requesterUserId`, `DELETE /cancel-request?followingUserId`
-- [ ] get-subscribers/get-subscriptions учитывают только `Accepted`
-- [ ] Сущность `Block { Id, BlockerUserId, BlockedUserId, CreatedAt }` + `BlockService`; при блокировке — взаимная отписка (обе связи), старые лайки/комменты остаются
-- [ ] Эндпоинты: `POST /Block/block-user?userId`, `DELETE /Block/unblock-user?userId`, `GET /Block/get-blocked-users`
-- [ ] Приватный профиль чужому: видны только аватар/имя/bio/счётчики; посты/сторис/списки скрыты без `Accepted`-подписки
-- [ ] Настройки: `GET /Settings/get-privacy`, `PUT /Settings/update-privacy`
-- [ ] **Фильтрация блокировок** во всех существующих выдачах (лента, поиск, комменты, чат-создание)
-- [ ] Миграция + сид: пример приватного аккаунта
+- [x] `User.IsPrivate` + сущность `PrivacySettings { Id, UserId(1:1), IsPrivate, ShowOnlineStatus, WhoCanMessage, WhoCanMention, WhoCanReplyStory }` (источник истины — `PrivacySettings`, ленивое создание, синхронизация `User.IsPrivate` при update)
+- [x] Enum'ы `WhoCanMessage/WhoCanMention {Everyone, Followers, Nobody}`, `WhoCanReplyStory {Everyone, Followers, CloseFriends, Nobody}` (+`FollowStatus {Pending=0, Accepted=1}`)
+- [x] `FollowingRelationShip.Status (enum: Pending=0, Accepted=1)`; подписка на публичный → `Accepted` (+`Follow`), на приватный → `Pending` + уведомление `FollowRequest`. Без model-level default (иначе EF подменял бы явный Pending на store-default); backfill Accepted в миграции
+- [x] Follow requests: `GET /FollowingRelationShip/get-follow-requests`, `POST /accept-request?requesterUserId` (+`FollowRequestAccepted`), `POST /decline-request?requesterUserId`, `DELETE /cancel-request?followingUserId`
+- [x] get-subscribers/get-subscriptions учитывают только `Accepted` (+ скрыты у приватного чужого без одобренной подписки)
+- [x] Сущность `Block { Id, BlockerUserId, BlockedUserId, CreatedAt }` + `BlockService`; при блокировке — взаимная отписка (обе связи, любой статус), старые лайки/комменты остаются
+- [x] Эндпоинты: `POST /Block/block-user?userId`, `DELETE /Block/unblock-user?userId`, `GET /Block/get-blocked-users`
+- [x] Приватный профиль чужому: видны только аватар/имя/bio/счётчики (+`isPrivate`/`isRequested` в DTO); посты/сторис/списки скрыты без `Accepted`-подписки; профиль скрыт при блокировке
+- [x] Настройки: `GET /Settings/get-privacy`, `PUT /Settings/update-privacy`
+- [x] **Фильтрация блокировок/приватности** в существующих выдачах через `AccessGuard`: лента (`get-posts`/`get-reels`/`get-following-post`/`get-post-by-id`), поиск (`get-users`), чат (create + send-message). Список комментов ещё не отдаётся отдельным эндпоинтом (только счётчик) — фильтр применится вместе с `get-comment-replies` в Phase 14
+- [x] Миграция `AddPrivacyAndBlocks` + сид: приватный аккаунт `diana`, pending-запрос `carol→diana`, block `bob→carol`
 
 ## Phase 13 — Хэштеги + Упоминания · §3, §4
 - [ ] Сущности `Hashtag { Id, Tag(unique,lowercase), PostsCount, CreatedAt }`, `PostHashtag { Id, PostId, HashtagId }` (M:N)

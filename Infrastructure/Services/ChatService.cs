@@ -109,6 +109,10 @@ public class ChatService : IChatService
         if (!receiverExists)
             throw new NotFoundException("Получатель не найден.");
 
+        // Нельзя начать переписку при блокировке в любую сторону.
+        if (await AccessGuard.IsBlockBetweenAsync(_context, currentId, receiverUserId))
+            throw new ForbiddenException("Переписка недоступна из-за блокировки.");
+
         // Нормализуем порядок участников — одна пара всегда даёт один (User1Id, User2Id),
         // что обеспечивает дедуп и работу уникального индекса на паре.
         var (user1, user2) = string.CompareOrdinal(currentId, receiverUserId) <= 0
@@ -148,6 +152,11 @@ public class ChatService : IChatService
 
         if (chat.User1Id != currentId && chat.User2Id != currentId)
             throw new ForbiddenException("Нет доступа к этому чату.");
+
+        // Если собеседник заблокирован (в любую сторону) — писать нельзя.
+        var interlocutorId = chat.User1Id == currentId ? chat.User2Id : chat.User1Id;
+        if (await AccessGuard.IsBlockBetweenAsync(_context, currentId, interlocutorId))
+            throw new ForbiddenException("Отправка сообщения недоступна из-за блокировки.");
 
         string? fileName = null;
         if (dto.File is not null)
