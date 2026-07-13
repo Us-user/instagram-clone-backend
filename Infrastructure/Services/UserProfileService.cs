@@ -94,26 +94,11 @@ public class UserProfileService : IUserProfileService
 
         var total = await query.CountAsync();
 
+        // Список избранного текущего юзера — общая проекция даёт isFavorite = true для этих постов.
         var posts = await query
             .Skip((page - 1) * size)
             .Take(size)
-            .Select(p => new GetPostDto
-            {
-                Id = p.Id,
-                Title = p.Title,
-                Content = p.Content,
-                CreatedAt = p.CreatedAt,
-                IsReel = p.IsReel,
-                UserId = p.UserId,
-                UserName = p.User!.UserName!,
-                UserImage = p.User.Avatar,
-                Images = p.Images.Select(i => i.ImageName).ToList(),
-                LikeCount = p.Likes.Count,
-                CommentCount = p.Comments.Count,
-                ViewCount = p.Views.Count,
-                IsLiked = p.Likes.Any(l => l.UserId == currentId),
-                IsFavorite = true
-            })
+            .Select(PostProjections.ToDto(currentId))
             .ToListAsync();
 
         return new PagedResponse<List<GetPostDto>>(posts, total, page, size);

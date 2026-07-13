@@ -10,10 +10,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 6 — Посты и взаимодействия
-- **Последняя сессия:** 2026-07-13 (07)
-- **Следующий шаг:** Phase 6 — `PostController`: `add-post` (multipart, images required), `delete-post` (только автор), `get-post-by-id`, `get-my-posts`, ленты `get-posts`/`get-reels`/`get-following-post` (фильтр+пагинация, счётчики, isLiked/isFavorite), тумблеры `like-post`/`add-post-favorite`, `view-post` (уникально), `add-comment`/`delete-comment` (только автор). Переиспользовать проекцию `Post → GetPostDto` (реализована в `UserProfileService.GetPostFavoritesAsync`) и `Pagination.Normalize`.
-- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Phase 5 завершена: 21 эндпоинт (10 User + 7 UserProfile + 4 FollowingRelationShip) виден в swagger с дословными путями контракта, все возвращают 401 без токена (fallback-политика). DB-пути требуют запущенного PostgreSQL (авто-миграция при старте корректно ловится).
+- **Активная фаза:** Phase 7 — Сторис
+- **Последняя сессия:** 2026-07-13 (08)
+- **Следующий шаг:** Phase 7 — `StoryService` + `StoryController`: `AddStories` (из поста `PostId` или файла, multipart), `DeleteStory` (только автор), ленты `get-stories` (активные <24ч, сгруппированы по авторам-подпискам), `get-user-stories/{userId}`, `get-my-stories`, `LikeStory`, `GetStoryById` (`GetStoryDto` + `viewerDto`), `add-story-view` (уникально на юзера → `GetStoryViewDto`). Переиспользовать `IFileService`, `Pagination`, окно 24ч (`CreatedAt > UtcNow.AddHours(-24)`).
+- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Phase 6 завершена: 12 эндпоинтов `Post` видны в swagger с дословными путями контракта, все возвращают 401 без токена; `add-post` смоделирован как `multipart/form-data` (Title/Content/IsReel/Images[]). Проекция `Post → GetPostDto` вынесена в общий `PostProjections.ToDto` (переиспользована и в `UserProfileService`). DB-пути требуют запущенного PostgreSQL (авто-миграция при старте корректно ловится).
 
 ---
 
@@ -80,9 +80,9 @@
 ## Phase 6 — Посты и взаимодействия
 > Цель: посты, лента, лайки/комменты/просмотры/избранное.
 
-- [ ] CRUD: `add-post` (multipart, images required), `delete-post` (только автор), `get-post-by-id`, `get-my-posts`
-- [ ] Ленты: `get-posts` (фильтр+пагинация, счётчики, isLiked/isFavorite), `get-reels`, `get-following-post`
-- [ ] `like-post` (тумблер), `view-post` (уникально), `add-comment`/`delete-comment` (только автор), `add-post-favorite` (тумблер)
+- [x] CRUD: `add-post` (multipart, images required), `delete-post` (только автор), `get-post-by-id`, `get-my-posts`
+- [x] Ленты: `get-posts` (фильтр+пагинация, счётчики, isLiked/isFavorite), `get-reels`, `get-following-post`
+- [x] `like-post` (тумблер), `view-post` (уникально), `add-comment`/`delete-comment` (только автор), `add-post-favorite` (тумблер)
 
 ## Phase 7 — Сторис
 > Цель: сторис с жизнью 24ч, лайки/просмотры/вьюеры.
