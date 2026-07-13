@@ -10,10 +10,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 8 — Чат и SignalR
-- **Последняя сессия:** 2026-07-13 (09)
-- **Следующий шаг:** Phase 8 — `ChatService` + `ChatController` + SignalR `ChatHub`: `get-chats` (последнее сообщение + непрочитанные), `get-chat-by-id` (пометить прочитанным), `create-chat` (дедуп), `send-message` (multipart PUT: ChatId/MessageText/File + рассылка через SignalR), `delete-message?massageId` (сохранить опечатку контракта; только отправитель), `delete-chat` (участник). Переиспользовать `IFileService`, `ICurrentUserService`; проверять членство в чате.
-- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Phase 7 завершена: 8 эндпоинтов `Story` видны в swagger с дословными путями контракта (включая PascalCase `AddStories`/`DeleteStory`/`LikeStory`/`GetStoryById`), все защищённые возвращают 401 без токена; `AddStories` смоделирован как `postId` (query) + `multipart/form-data` (Image). Проекция `Story → GetStoryDto` вынесена в общий `StoryProjections.ToDto` (для сторис из поста `FileName` берётся из первого изображения поста-источника). Окно активности 24ч (`CreatedAt > UtcNow.AddHours(-24)`) применяется во всех выборках сторис. DB-пути требуют запущенного PostgreSQL (авто-миграция при старте корректно ловится).
+- **Активная фаза:** Phase 9 — Локации и поиск
+- **Последняя сессия:** 2026-07-13 (10)
+- **Следующий шаг:** Phase 9 — `LocationService` + `LocationController`: `get-Locations` (фильтр City/State/ZipCode/Country + пагинация `PagedResponse<T>`), `get-Location-by-id?id`, `add-Location` (body `AddLocationDto`, все поля required), `update-Location` (body `UpdateLocationDto` с `locationId`), `delete-Location?id`. DTO `AddLocationDto`/`UpdateLocationDto`/`GetLocationDto` уже в Domain; добавить FluentValidation-валидаторы. Затем ревизия search-history эндпоинтов User (Phase 5).
+- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Phase 8 завершена: 6 эндпоинтов `Chat` видны в swagger с дословными путями контракта (`get-chats`, `get-chat-by-id`, `create-chat`, `send-message`, `delete-message`, `delete-chat`), опечатка `massageId` сохранена, `send-message` — `PUT` + `multipart/form-data` (ChatId/MessageText/File); все защищённые возвращают 401 без токена. SignalR-хаб `/chatHub` смонтирован и требует авторизации (negotiate без токена → 401); токен для хаба принимается из query `access_token` (WebSocket). Слои разделены: абстракция `IChatNotifier` в Infrastructure, реализация `ChatNotifier` поверх `IHubContext<ChatHub, IChatClient>` + `CustomUserIdProvider` (адресация по claim `userId`) — в WebApi. Проекции чата вынесены в `ChatProjections`. DB-пути требуют запущенного PostgreSQL (авто-миграция при старте корректно ловится).
 
 ---
 
@@ -94,9 +94,9 @@
 ## Phase 8 — Чат и SignalR
 > Цель: чаты и сообщения в реальном времени.
 
-- [ ] Chat service + controller: `get-chats` (последнее сообщение + непрочитанные), `get-chat-by-id` (пометить прочитанным), `create-chat` (дедуп)
-- [ ] `send-message` (multipart), `delete-message` (только отправитель, сохранить опечатку `massageId`), `delete-chat` (участник)
-- [ ] SignalR `ChatHub`: доставка/отправка сообщений в реальном времени
+- [x] Chat service + controller: `get-chats` (последнее сообщение + непрочитанные), `get-chat-by-id` (пометить прочитанным), `create-chat` (дедуп)
+- [x] `send-message` (multipart), `delete-message` (только отправитель, сохранить опечатку `massageId`), `delete-chat` (участник)
+- [x] SignalR `ChatHub`: доставка/отправка сообщений в реальном времени
 
 ## Phase 9 — Локации и поиск
 > Цель: справочник локаций (независимая фича).

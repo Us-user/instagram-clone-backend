@@ -1,6 +1,9 @@
 using Infrastructure;
 using Infrastructure.Data.Seed;
+using Infrastructure.Services.Interfaces;
+using Microsoft.AspNetCore.SignalR;
 using WebApi.Extensions;
+using WebApi.Hubs;
 using WebApi.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,6 +14,12 @@ builder.Services.AddControllers();
 // Слой данных + сквозные сервисы (DbContext, Identity, токены, файлы, текущий юзер,
 // AutoMapper, FluentValidation).
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// SignalR (чат в реальном времени). Реализация IChatNotifier поверх ChatHub живёт здесь,
+// в WebApi; сервис чата в Infrastructure зависит только от абстракции.
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
+builder.Services.AddScoped<IChatNotifier, ChatNotifier>();
 
 // JWT-аутентификация + авторизация (все эндпоинты защищены по умолчанию).
 builder.Services.AddJwtAuthentication(builder.Configuration);
@@ -64,5 +73,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<ChatHub>("/chatHub");
 
 app.Run();
