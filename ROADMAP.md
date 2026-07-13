@@ -10,10 +10,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 1 — Доменная модель
-- **Последняя сессия:** 2026-07-13 (02)
-- **Следующий шаг:** Phase 1 — Enum `Gender`, `Response<T>`/`PagedResponse<T>`, сущности и DTO из контракта
-- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors); приложение запускается, Swagger отвечает (проверено)
+- **Активная фаза:** Phase 2 — Слой данных (DbContext, EF-конфигурации, миграции, Seed)
+- **Последняя сессия:** 2026-07-13 (03)
+- **Следующий шаг:** Phase 2 — `DataContext : IdentityDbContext<User, IdentityRole, string>`, Fluent-конфигурации связей/индексов, начальная миграция, Seed
+- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors)
 
 ---
 
@@ -32,14 +32,14 @@
 ## Phase 1 — Доменная модель (Entities, Enums, DTO, Responses)
 > Цель: все доменные типы компилируются.
 
-- [ ] Enum `Gender { Male = 0, Female = 1 }`
-- [ ] Обёртки `Response<T>`, `PagedResponse<T>`
-- [ ] Сущности: User (`: IdentityUser<string>`), UserProfile
-- [ ] Сущности постов: Post, PostImage, PostLike, PostView, PostComment, PostFavorite
-- [ ] Сущности сторис: Story, StoryLike, StoryView
-- [ ] Прочие: FollowingRelationShip, Chat, Message, Location, SearchHistory, UserSearchHistory
-- [ ] DTO из контракта: RegisterDto, LoginDto, AddLocationDto, UpdateLocationDto, AddPostCommentDto, AddPostFavoriteDto, UpdateUserProfileDto, GetStoryDto, ViewerDto, GetStoryViewDto
-- [ ] Read/response DTO под каждый эндпоинт
+- [x] Enum `Gender { Male = 0, Female = 1 }`
+- [x] Обёртки `Response<T>`, `PagedResponse<T>`
+- [x] Сущности: User (`: IdentityUser<string>`), UserProfile
+- [x] Сущности постов: Post, PostImage, PostLike, PostView, PostComment, PostFavorite
+- [x] Сущности сторис: Story, StoryLike, StoryView
+- [x] Прочие: FollowingRelationShip, Chat, Message, Location, SearchHistory, UserSearchHistory
+- [x] DTO из контракта: RegisterDto, LoginDto, AddLocationDto, UpdateLocationDto, AddPostCommentDto, AddPostFavoriteDto, UpdateUserProfileDto, GetStoryDto, ViewerDto, GetStoryViewDto
+- [x] Read/response DTO под ключевые эндпоинты (Get*Dto для Post/UserProfile/User/Location/Chat/Story; уточняются в фазах фич)
 
 ## Phase 2 — Слой данных (DbContext, EF-конфигурации, миграции, Seed)
 > Цель: БД строится, наполняется тестовыми данными.
