@@ -55,6 +55,9 @@ public static class DependencyInjection
 
         // Сервисы фич.
         services.AddScoped<IAccountService, AccountService>();
+        services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IUserProfileService, UserProfileService>();
+        services.AddScoped<IFollowingRelationShipService, FollowingRelationShipService>();
 
         // AutoMapper: профили из этой сборки.
         services.AddAutoMapper(typeof(MappingProfile).Assembly);
