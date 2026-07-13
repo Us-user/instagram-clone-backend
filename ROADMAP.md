@@ -10,10 +10,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 10 — Качество, харденинг и документация (почти завершена)
-- **Последняя сессия:** 2026-07-13 (12)
-- **Следующий шаг:** единственный оставшийся пункт Phase 10 — ручной smoke-тест всех групп эндпоинтов на живом PostgreSQL (заблокирован: БД на `127.0.0.1:5432` не запущена). После него проект готов.
-- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Phase 10 — статический аудит пройден: (1) **авторизация владельца** подтверждена по всем ресурсам — `delete-post`/`delete-comment` (автор), `DeleteStory` (автор), `delete-message` (отправитель), `get-chat-by-id`/`send-message`/`delete-chat` (участник) кидают `ForbiddenException` (403); `delete-user` — `[Authorize(Roles=Admin)]`; search-history удаления скоупятся по текущему юзеру; подписка запрещает self/dup. (2) **Пагинация** — все эндпоинты с PageNumber/PageSize (`get-users`, `get-posts`, `get-reels`, `get-following-post`, `get-post-favorites`, `get-Locations`) прогоняют `Pagination.Normalize` (page≥1, size∈[1;100]) и возвращают `PagedResponse<T>`. (3) **Валидаторы** — понятные сообщения во всех FluentValidation-валидаторах. (4) **Глобальная обработка** — `ExceptionHandlingMiddleware` мапит ValidationException/BadRequest→400, Unauthorized→401, Forbidden→403, NotFound→404, иначе→500; зарегистрирован первым в конвейере. **README** переписан: полный список 57 эндпоинтов (8 групп), формат ответа, коды ошибок, auth, SignalR, seed-аккаунты. Остаётся только smoke-тест на живой БД.
+- **Активная фаза:** Phase 10 — Качество, харденинг и документация ✅ **ЗАВЕРШЕНА** (все 7 пунктов). Проект готов к деплою.
+- **Последняя сессия:** 2026-07-13 (13)
+- **Следующий шаг:** опционально — деплой web service на Render (`Dockerfile` + `render.yaml` + env-переменные `DATABASE_URL`/`Jwt`). Дальше — доп. фичи сверх ТЗ по запросу.
+- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). **Smoke-тест на живом PostgreSQL (Render, Ohio) пройден — 12/12 PASS**: login/register, get-my-profile, get-users (paged), get-posts (paged, счётчики), like-post (toggle), add-comment, get-post-by-id, get-Locations (paged, 5 seed), get-subscriptions, create-chat, no-token→401. Авто-миграция + seed на чистой БД Render отработали (admin/alice/bob/carol + профили, подписки, посты, локации). **Найден и исправлен реальный баг:** `User : IdentityUser<string>` не генерировал строковый `Id` (generic-конструктор его не задаёт, EF строковый ключ не автогенерит) → падали seed и регистрация с «primary key property 'Id' is null». Фикс — конструктор `User()` задаёт `Id`/`SecurityStamp` (как не-generic `IdentityUser`). Также добавлена поддержка `DATABASE_URL` (URL PaaS → Npgsql + `SSL Mode=Require`) в `DependencyInjection`. Статический аудит (сессия 12) ранее подтвердил: авторизация владельца по всем ресурсам, пагинация, валидаторы, глобальная обработка ошибок; README = полный список 57 эндпоинтов.
 
 ---
 
@@ -112,5 +112,5 @@
 - [x] Ревизия сообщений валидации
 - [x] Проверка глобальной обработки ошибок
 - [x] Полный README (setup, миграции, connection string, `dotnet run`, список эндпоинтов)
-- [ ] Ручной smoke-тест всех групп эндпоинтов (blocked — нужен запущенный PostgreSQL)
+- [x] Ручной smoke-тест всех групп эндпоинтов (на живом PostgreSQL Render — 12/12 PASS)
 - [x] Финальная сборка без предупреждений

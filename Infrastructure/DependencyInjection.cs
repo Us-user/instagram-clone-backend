@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace Infrastructure;
 
@@ -25,7 +26,7 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddDbContext<DataContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
+            options.UseNpgsql(ResolveConnectionString(configuration)));
 
         // AddIdentityCore не тянет cookie-схему аутентификации — это удобно для JWT-API.
         // Даёт UserManager/RoleManager (нужны для Seed и Account-сервиса).
@@ -70,5 +71,46 @@ public static class DependencyInjection
         services.AddValidatorsFromAssemblyContaining<RegisterDtoValidator>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Определяет строку подключения к PostgreSQL. Приоритет — переменной <c>DATABASE_URL</c>
+    /// (формат PaaS-хостингов вроде Render/Heroku: <c>postgres://user:pass@host:port/db</c>),
+    /// которая конвертируется в key-value формат Npgsql с включённым SSL. Если её нет —
+    /// берётся обычная <c>ConnectionStrings:DefaultConnection</c> из конфигурации.
+    /// </summary>
+    private static string ResolveConnectionString(IConfiguration configuration)
+    {
+        var databaseUrl = configuration["DATABASE_URL"];
+        if (!string.IsNullOrWhiteSpace(databaseUrl))
+            return BuildNpgsqlFromUrl(databaseUrl);
+
+        return configuration.GetConnectionString("DefaultConnection")
+            ?? throw new InvalidOperationException(
+                "Не задана строка подключения: укажите DATABASE_URL или ConnectionStrings:DefaultConnection.");
+    }
+
+    /// <summary>
+    /// Разбирает URL-строку подключения PaaS в <see cref="NpgsqlConnectionStringBuilder"/>.
+    /// SSL включается принудительно (<c>Require</c>) — Render/Heroku требуют шифрованное
+    /// соединение. В Npgsql 8 режим <c>Require</c> шифрует без строгой проверки сертификата,
+    /// поэтому отдельный <c>Trust Server Certificate</c> не нужен.
+    /// </summary>
+    private static string BuildNpgsqlFromUrl(string databaseUrl)
+    {
+        var uri = new Uri(databaseUrl);
+        var userInfo = uri.UserInfo.Split(':', 2);
+
+        var builder = new NpgsqlConnectionStringBuilder
+        {
+            Host = uri.Host,
+            Port = uri.Port > 0 ? uri.Port : 5432,
+            Username = Uri.UnescapeDataString(userInfo[0]),
+            Password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : string.Empty,
+            Database = uri.AbsolutePath.TrimStart('/'),
+            SslMode = SslMode.Require
+        };
+
+        return builder.ConnectionString;
     }
 }
