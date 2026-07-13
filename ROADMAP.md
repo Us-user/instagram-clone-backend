@@ -10,10 +10,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 4 — Аутентификация и Account (register/login/пароли, выдача JWT)
-- **Последняя сессия:** 2026-07-13 (05)
-- **Следующий шаг:** Phase 4 — Account service + controller (`register`, `login`, `ForgotPassword`, `ResetPassword`, `ChangePassword`) поверх готовой инфраструктуры (ITokenService, валидаторы Register/Login уже есть); при регистрации создавать пустой UserProfile; `[AllowAnonymous]` на register/login
-- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Приложение стартует, Swagger отдаёт Bearer-схему; применение миграции к БД требует запущенного PostgreSQL.
+- **Активная фаза:** Phase 5 — Пользователи, профили, подписки
+- **Последняя сессия:** 2026-07-13 (06)
+- **Следующий шаг:** Phase 5 — `UserController` (get-users с поиском+пагинацией, история поиска, delete-user только Admin), `UserProfileController` (by-id со счётчиками/isFollowing, get-my-profile, update, image update/delete, is-follow, get-post-favorites), `FollowingRelationShipController` (subscribers/subscriptions/add/delete с запретом дубля и подписки на себя). Использовать `PagedResponse<T>`, `ICurrentUserService`, AutoMapper.
+- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Все 5 эндпоинтов Account проверены рантайм-смоуком (валидация → unified `Response<T>`, 401 без токена, anonymous-доступ к forgot/reset). Применение миграции к БД требует запущенного PostgreSQL.
 
 ---
 
@@ -65,10 +65,10 @@
 ## Phase 4 — Аутентификация и Account
 > Цель: регистрация/вход/пароли работают, выдаётся JWT.
 
-- [ ] Настройка ASP.NET Core Identity
-- [ ] Account service + controller: `register`, `login`, `ForgotPassword`, `ResetPassword`, `ChangePassword`
-- [ ] Валидаторы Register/Login (совпадение паролей, уникальность email/userName)
-- [ ] При регистрации создаётся пустой UserProfile
+- [x] Настройка ASP.NET Core Identity
+- [x] Account service + controller: `register`, `login`, `ForgotPassword`, `ResetPassword`, `ChangePassword`
+- [x] Валидаторы Register/Login (совпадение паролей, уникальность email/userName)
+- [x] При регистрации создаётся пустой UserProfile
 
 ## Phase 5 — Пользователи, профили, подписки
 > Цель: соц-граф и профили.
