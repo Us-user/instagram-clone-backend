@@ -1,6 +1,9 @@
 # ROADMAP — Instagram Clone Backend (ASP.NET Core 8 + PostgreSQL)
 
-Полное ТЗ: [`instagram-backend-prompt.md`](./instagram-backend-prompt.md).
+Источники истины:
+- **База (готово):** [`instagram-backend-prompt.md`](./instagram-backend-prompt.md)
+- **Новые фичи (текущая работа):** [`instagram-backend-features-prompt.md`](./instagram-backend-features-prompt.md)
+
 Проект ведётся сессиями: `/start` продолжает работу, `/stop` фиксирует изменения.
 Логи сессий: [`.claude/sessions/`](./.claude/sessions/).
 
@@ -10,107 +13,155 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 10 — Качество, харденинг и документация ✅ **ЗАВЕРШЕНА** (все 7 пунктов). Проект готов к деплою.
-- **Последняя сессия:** 2026-07-13 (13)
-- **Следующий шаг:** опционально — деплой web service на Render (`Dockerfile` + `render.yaml` + env-переменные `DATABASE_URL`/`Jwt`). Дальше — доп. фичи сверх ТЗ по запросу.
-- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). **Smoke-тест на живом PostgreSQL (Render, Ohio) пройден — 12/12 PASS**: login/register, get-my-profile, get-users (paged), get-posts (paged, счётчики), like-post (toggle), add-comment, get-post-by-id, get-Locations (paged, 5 seed), get-subscriptions, create-chat, no-token→401. Авто-миграция + seed на чистой БД Render отработали (admin/alice/bob/carol + профили, подписки, посты, локации). **Найден и исправлен реальный баг:** `User : IdentityUser<string>` не генерировал строковый `Id` (generic-конструктор его не задаёт, EF строковый ключ не автогенерит) → падали seed и регистрация с «primary key property 'Id' is null». Фикс — конструктор `User()` задаёт `Id`/`SecurityStamp` (как не-generic `IdentityUser`). Также добавлена поддержка `DATABASE_URL` (URL PaaS → Npgsql + `SSL Mode=Require`) в `DependencyInjection`. Статический аудит (сессия 12) ранее подтвердил: авторизация владельца по всем ресурсам, пагинация, валидаторы, глобальная обработка ошибок; README = полный список 57 эндпоинтов.
+- **Активная фаза:** Phase 11 — Уведомления (Notifications + NotificationHub) — **не начата**. Стартует блок новых фич (`instagram-backend-features-prompt.md`).
+- **Последняя сессия:** 2026-07-14 (14) — составлен роадмап новых фич, переработаны `/start` и `/stop`.
+- **Следующий шаг:** начать Phase 11 — сущность `Notification`, `NotificationService`, `NotificationHub` (SignalR), 5 эндпоинтов, автосоздание уведомлений из лайков/комментов/подписок, миграция.
+- **Состояние сборки:** 🟢 зелёная (база 0–10 завершена, 57 эндпоинтов, smoke-тест на живом PostgreSQL 12/12 PASS).
+
+## ⚠️ Инварианты для всех новых фаз (не нарушать)
+1. **Обратная совместимость.** Существующие эндпоинты базы по контракту не менять — только расширять **необязательными** полями (напр. `parentCommentId`). Сохранять оригинальные опечатки контракта (`massageId`).
+2. Единый формат ответа `Response<T>` / `PagedResponse<T>`, ошибки — через существующий middleware.
+3. **ID текущего юзера — из JWT claims**, не из параметров. Новые эндпоинты авторизованы по умолчанию.
+4. **Приватность и блокировки проверять везде** (лента, поиск, комменты, explore, чат, сторис, presence) — не отдавать контент/статусы тем, кому не положено.
+5. **Не создавать уведомления/mention на собственные действия.**
+6. Авторизация владельца/роли: править/удалять — только владелец; админ-действия — роль `Admin`; групп-действия — по роли в группе.
+7. Пагинация на всех списках; FluentValidation на новых DTO; безопасная загрузка файлов (voice, аватар группы).
+8. Каждая фаза: миграция EF Core + обновление сида (по необходимости) + держать сборку зелёной (`dotnet build`).
+9. Swagger: новые контроллеры сгруппированы по тегам, Bearer-авторизация, описания.
+10. Поле `isVerified` отдавать во всех DTO пользователя/автора (профиль, автор поста/коммента/сторис).
 
 ---
 
-## Phase 0 — Фундамент и инструментарий
-> Цель: компилируемое пустое решение со слоистой архитектурой, которое запускается.
+## ✅ База — Phase 0–10 (ЗАВЕРШЕНО)
+> Полный бэкенд по `instagram-backend-prompt.md`. 57 эндпоинтов, smoke-тест на живом PostgreSQL (Render) 12/12 PASS. Детали — в логах сессий 01–13.
 
-- [x] Создать solution `InstagramClone.sln`
-- [x] Проекты: `Domain` (classlib), `Infrastructure` (classlib), `WebApi` (web)
-- [x] Ссылки: Infrastructure → Domain, WebApi → Infrastructure & Domain
-- [x] NuGet: EF Core 8, Npgsql, Identity, JWT Bearer, AutoMapper, FluentValidation, Swashbuckle, SignalR
-- [x] `appsettings.json` с плейсхолдерами (ConnectionString PostgreSQL, Jwt: Issuer/Audience/Key/Lifetime)
-- [x] Минимальный `Program.cs`, который запускается
-- [x] `wwwroot/images` + отдача статики
-- [x] Скелет README
+- [x] **Phase 0** — Фундамент: solution, слои Domain/Infrastructure/WebApi, NuGet, `Program.cs`, `wwwroot/images`.
+- [x] **Phase 1** — Доменная модель: Entities, Enums, DTO, `Response<T>`/`PagedResponse<T>`.
+- [x] **Phase 2** — Слой данных: `DataContext : IdentityDbContext`, Fluent API, миграция, Seed, авто-применение.
+- [x] **Phase 3** — Инфраструктура: JWT, middleware ошибок, FileService, AutoMapper, FluentValidation, Swagger, CurrentUser из claims, CORS.
+- [x] **Phase 4** — Account: register/login/forgot/reset/change-password, валидаторы, авто-создание UserProfile.
+- [x] **Phase 5** — Пользователи/профили/подписки: get-users, история поиска, UserProfile, FollowingRelationShip.
+- [x] **Phase 6** — Посты: CRUD, ленты, лайки/комменты/просмотры/избранное.
+- [x] **Phase 7** — Сторис: жизнь 24ч, лайки/просмотры/вьюеры.
+- [x] **Phase 8** — Чат + SignalR `ChatHub`: чаты, сообщения real-time.
+- [x] **Phase 9** — Локации и поиск.
+- [x] **Phase 10** — Качество: аудит авторизации/пагинации/валидации/ошибок, README, smoke-тест, зелёная сборка.
 
-## Phase 1 — Доменная модель (Entities, Enums, DTO, Responses)
-> Цель: все доменные типы компилируются.
+---
 
-- [x] Enum `Gender { Male = 0, Female = 1 }`
-- [x] Обёртки `Response<T>`, `PagedResponse<T>`
-- [x] Сущности: User (`: IdentityUser<string>`), UserProfile
-- [x] Сущности постов: Post, PostImage, PostLike, PostView, PostComment, PostFavorite
-- [x] Сущности сторис: Story, StoryLike, StoryView
-- [x] Прочие: FollowingRelationShip, Chat, Message, Location, SearchHistory, UserSearchHistory
-- [x] DTO из контракта: RegisterDto, LoginDto, AddLocationDto, UpdateLocationDto, AddPostCommentDto, AddPostFavoriteDto, UpdateUserProfileDto, GetStoryDto, ViewerDto, GetStoryViewDto
-- [x] Read/response DTO под ключевые эндпоинты (Get*Dto для Post/UserProfile/User/Location/Chat/Story; уточняются в фазах фич)
+# 🚀 Новые фичи (`instagram-backend-features-prompt.md`)
 
-## Phase 2 — Слой данных (DbContext, EF-конфигурации, миграции, Seed)
-> Цель: БД строится, наполняется тестовыми данными.
+> Порядок фаз выстроен по зависимостям: сначала кросс-срезовые сервисы (уведомления, приватность/блокировки), затем фичи, которые на них опираются. Каждая фаза = сущности + сервис + контроллер + миграция + проводка real-time/уведомлений, где нужно.
 
-- [x] `DataContext : IdentityDbContext<User, IdentityRole, string>`
-- [x] Fluent API: связи, каскады, индексы, уникальные ограничения
-- [x] Начальная миграция (`InitialCreate`)
-- [x] Seed: роли Admin/User + тестовые пользователи и данные (`DbInitializer`)
-- [x] Авто-применение миграций и Seed при старте
+## Phase 11 — Уведомления (Notifications + NotificationHub) · §2
+> Кросс-срезовый сервис: строим первым, чтобы последующие фазы сразу подключали свои уведомления.
 
-## Phase 3 — Сквозная инфраструктура
-> Цель: общие сервисы, которыми пользуются все фичи.
+- [ ] Сущность `Notification { Id, RecipientUserId, ActorUserId, Type, EntityType, EntityId?, IsRead, CreatedAt }`
+- [ ] Enum `NotificationType { Like, Follow, Comment, Mention, CommentReply, CommentLike, FollowRequest, FollowRequestAccepted, StoryReply, PostShared }`
+- [ ] Enum `NotificationEntityType { Post, Comment, Story, User }`
+- [ ] EF-конфигурация + индексы, миграция
+- [ ] `INotificationService` + `NotificationService`: create (с проверкой «не себе»), выдача с **группировкой** по `(Type, EntityType, EntityId)` за окно времени (actors: первые 2–3 + счётчик), unread-count, mark-as-read/all, delete
+- [ ] `NotificationHub` (SignalR) + `INotificationNotifier` → событие `ReceiveNotification` (live «звоночек» и счётчик)
+- [ ] Эндпоинты: `GET /Notification/get-notifications`, `GET /Notification/get-unread-count`, `PUT /Notification/mark-as-read?id`, `PUT /Notification/mark-all-as-read`, `DELETE /Notification/delete-notification?id`
+- [ ] Проводка существующих действий: уведомления `Like` (лайк поста), `Comment`, `Follow` — из соответствующих сервисов
+- [ ] AutoMapper-профиль, валидаторы, регистрация в DI
 
-- [x] JWT token service + конфигурация (claims: userId, userName, email, role)
-- [x] Глобальный middleware обработки исключений → `Response<T>` со statusCode/errors
-- [x] File storage service (сохранение/удаление, проверка расширения/размера, Guid-имена)
-- [x] Базовые профили AutoMapper
-- [x] Подключение FluentValidation + базовые валидаторы
-- [x] Swagger с Bearer-кнопкой, XML-комментариями, группировкой по тегам
-- [x] Доступ к текущему юзеру из claims (не из параметров)
-- [x] CORS AllowAll (dev)
+## Phase 12 — Приватность: приватные аккаунты, follow requests, блокировка, настройки · §6
+> Кросс-срезовый фундамент для упоминаний, чата, сторис, explore.
 
-## Phase 4 — Аутентификация и Account
-> Цель: регистрация/вход/пароли работают, выдаётся JWT.
+- [ ] `User.IsPrivate` + сущность `PrivacySettings { Id, UserId(1:1), IsPrivate, ShowOnlineStatus, WhoCanMessage, WhoCanMention, WhoCanReplyStory }` (источник истины — `PrivacySettings`, синхронизация с User)
+- [ ] Enum'ы `WhoCanMessage/WhoCanMention {Everyone, Followers, Nobody}`, `WhoCanReplyStory {Everyone, Followers, CloseFriends, Nobody}`
+- [ ] `FollowingRelationShip.Status (enum: Pending=0, Accepted=1)`; подписка на публичный → `Accepted`, на приватный → `Pending` + уведомление `FollowRequest`
+- [ ] Follow requests: `GET /FollowingRelationShip/get-follow-requests`, `POST /accept-request?requesterUserId` (+`FollowRequestAccepted`), `POST /decline-request?requesterUserId`, `DELETE /cancel-request?followingUserId`
+- [ ] get-subscribers/get-subscriptions учитывают только `Accepted`
+- [ ] Сущность `Block { Id, BlockerUserId, BlockedUserId, CreatedAt }` + `BlockService`; при блокировке — взаимная отписка (обе связи), старые лайки/комменты остаются
+- [ ] Эндпоинты: `POST /Block/block-user?userId`, `DELETE /Block/unblock-user?userId`, `GET /Block/get-blocked-users`
+- [ ] Приватный профиль чужому: видны только аватар/имя/bio/счётчики; посты/сторис/списки скрыты без `Accepted`-подписки
+- [ ] Настройки: `GET /Settings/get-privacy`, `PUT /Settings/update-privacy`
+- [ ] **Фильтрация блокировок** во всех существующих выдачах (лента, поиск, комменты, чат-создание)
+- [ ] Миграция + сид: пример приватного аккаунта
 
-- [x] Настройка ASP.NET Core Identity
-- [x] Account service + controller: `register`, `login`, `ForgotPassword`, `ResetPassword`, `ChangePassword`
-- [x] Валидаторы Register/Login (совпадение паролей, уникальность email/userName)
-- [x] При регистрации создаётся пустой UserProfile
+## Phase 13 — Хэштеги + Упоминания · §3, §4
+- [ ] Сущности `Hashtag { Id, Tag(unique,lowercase), PostsCount, CreatedAt }`, `PostHashtag { Id, PostId, HashtagId }` (M:N)
+- [ ] Сущность `Mention { Id, MentionedUserId, AuthorUserId, EntityType(Post/Comment/StoryReply), EntityId, CreatedAt }`
+- [ ] `HashtagService`: парсинг `#tag` из Title/Content при add/edit поста → нормализация, upsert, инкремент `PostsCount`; декремент при удалении поста
+- [ ] `MentionService`: парсинг `@username` при сохранении поста/коммента/ответа на сторис → `Mention` + уведомление `Mention`; учитывать `WhoCanMention`
+- [ ] Эндпоинты Hashtag: `GET /Hashtag/search`, `GET /Hashtag/get-posts-by-tag?tag`, `GET /Hashtag/get-trending`
+- [ ] В DTO объектов отдавать список упомянутых юзеров (id + username) для кликабельных ссылок
+- [ ] Миграция
 
-## Phase 5 — Пользователи, профили, подписки
-> Цель: соц-граф и профили.
+## Phase 14 — Комментарии: ответы (2 уровня) + лайки · §5
+- [ ] `PostComment.ParentCommentId (int?)` — максимум 2 уровня (ответ на ответ → к тому же родителю)
+- [ ] Расширить `POST /Post/add-comment`: необязательный `parentCommentId`; авто-подстановка `@username` + `Mention` + уведомление `CommentReply`
+- [ ] Сущность `CommentLike { Id, CommentId, UserId, CreatedAt }`; `POST /Post/like-comment?commentId` (тумблер) + уведомление `CommentLike`
+- [ ] `GET /Post/get-comment-replies?commentId`; в DTO коммента: `repliesCount`, `likesCount`, `isLiked`
+- [ ] Миграция
 
-- [x] User: `get-users` (поиск+пагинация), история поиска (текст и профили), `delete-user` (только Admin)
-- [x] UserProfile: by-id со счётчиками и isFollowing, `get-my-profile`, `update`, image update/delete, `is-follow`, `get-post-favorites`
-- [x] FollowingRelationShip: subscribers, subscriptions, add, delete (запрет дубля и подписки на себя)
+## Phase 15 — Групповые чаты · §7
+> Отдельная ветка от личных 1:1 — базовые Chat/Message не трогаем.
 
-## Phase 6 — Посты и взаимодействия
-> Цель: посты, лента, лайки/комменты/просмотры/избранное.
+- [ ] Сущности `GroupChat { Id, Name, Avatar?, CreatorUserId, CreatedAt }`, `GroupChatMember { Id, GroupChatId, UserId, Role(Admin/Member), JoinedAt }`, `GroupMessage { Id, GroupChatId, SenderUserId?, MessageText?, FileName?, MessageType, Duration?, Waveform?, ReplyToMessageId?, IsForwarded, CreatedAt }`
+- [ ] Enum `GroupMemberRole {Admin, Member}`; группа остаётся группой даже с 1 участником
+- [ ] **Системные сообщения** (`MessageType=System`, `SenderUserId=null`): создал/добавил/удалил/вышел/сменил название/назначен админом
+- [ ] `GroupChatService` + SignalR-рассылка участникам (расширить/добавить хаб)
+- [ ] Эндпоинты: `POST /GroupChat/create`, `GET /get-my-groups`, `GET /get-group-by-id?groupId` (+пометить прочитанными), `POST /add-member`, `DELETE /remove-member`, `POST /promote-admin`, `POST /leave`, `PUT /update-info` (multipart: Name, Avatar), `PUT /send-message` (multipart), `DELETE /delete-message?messageId`
+- [ ] Роли: Admin — управление участниками/инфо/промоут; Member — писать и выйти
+- [ ] Миграция + сид: пример группы
 
-- [x] CRUD: `add-post` (multipart, images required), `delete-post` (только автор), `get-post-by-id`, `get-my-posts`
-- [x] Ленты: `get-posts` (фильтр+пагинация, счётчики, isLiked/isFavorite), `get-reels`, `get-following-post`
-- [x] `like-post` (тумблер), `view-post` (уникально), `add-comment`/`delete-comment` (только автор), `add-post-favorite` (тумблер)
+## Phase 16 — Сообщения: реакции, reply, forward, голосовые (личные + группы) · §8
+- [ ] Изменения `Message`: `ReplyToMessageId?`, `IsForwarded`, `MessageType(Text/Image/File/Voice)`, `Duration?`, `Waveform?`
+- [ ] Enum `MessageType`; enum `MessageContext {Direct, Group}`
+- [ ] Сущность `MessageReaction { Id, MessageId, MessageContext, UserId, Emoji, CreatedAt }` — один юзер = одна реакция (повтор снимает, другой эмодзи заменяет)
+- [ ] `POST /Message/react?messageId&context&emoji` (тумблер/замена) + real-time пуш
+- [ ] Reply: цитата исходного в DTO (текст/превью)
+- [ ] Forward: `POST /Message/forward?messageId&context&targetChatId&targetContext` — копия содержимого, `IsForwarded=true`
+- [ ] Голосовые: `MessageType=Voice`, файл в `wwwroot/voice`, `Duration`, `Waveform` (JSON-массив; при недоступности генерации — плейсхолдер); отправка через send-message (или `send-voice`)
+- [ ] Миграция
 
-## Phase 7 — Сторис
-> Цель: сторис с жизнью 24ч, лайки/просмотры/вьюеры.
+## Phase 17 — Сторис: close friends, ответы, репост поста · §9
+- [ ] Сущность `CloseFriend { Id, UserId, FriendUserId, CreatedAt }`; `Story.Audience (enum All/CloseFriends)`, `Story.SharedPostId (int?)`
+- [ ] Эндпоинты CloseFriend: `POST /add?userId`, `DELETE /remove?userId`, `GET /get-list`
+- [ ] Публикация сторис с `audience`; в `get-stories`/`get-user-stories` фильтровать close-friends по членству зрителя
+- [ ] Ответы на сторис: `POST /Story/reply?storyId` → личное сообщение автору (создать чат если нет) + сущность `StoryReply { Id, StoryId, FromUserId, MessageId, CreatedAt }` + уведомление `StoryReply`; учитывать `WhoCanReplyStory`
+- [ ] Репост поста: `POST /Story/share-post?postId` → сторис с `SharedPostId` (только публичные посты) + уведомление `PostShared`
+- [ ] Миграция
 
-- [x] `AddStories` (из поста или файла), `DeleteStory` (только автор)
-- [x] `get-stories` (активные <24ч, сгруппированы по авторам), `get-user-stories/{userId}`, `get-my-stories`
-- [x] `LikeStory`, `GetStoryById` (viewerDto), `add-story-view` (уникально на юзера)
+## Phase 18 — Real-time статусы: presence (взаимная приватность) + typing · §1
+- [ ] Presence: **взаимная** логика `ShowOnlineStatus` — если у запрашивающего false, он не видит чужие статусы и его статус скрыт; отдавать `isOnline` + `lastSeen (DateTime?)`
+- [ ] Typing в личном чате: `UserTyping{chatId, userId, userName, kind}`, `kind ∈ {text, voice}`
+- [ ] Typing в группах: один печатает → имя; несколько → список печатающих
+- [ ] `kind=voice` при записи голосового; событие эфемерное (в БД не пишем)
 
-## Phase 8 — Чат и SignalR
-> Цель: чаты и сообщения в реальном времени.
+## Phase 19 — Верификация (Admin) · §10
+- [ ] `User.IsVerified`; `AdminController` со всеми методами `[Authorize(Roles="Admin")]`
+- [ ] Эндпоинты: `POST /Admin/verify-user?userId`, `DELETE /Admin/unverify-user?userId`, `POST /Admin/grant-admin?userId`, `DELETE /Admin/revoke-admin?userId`
+- [ ] `isVerified` во всех DTO пользователя/автора (профиль, автор поста/коммента/сторис)
+- [ ] Миграция
 
-- [x] Chat service + controller: `get-chats` (последнее сообщение + непрочитанные), `get-chat-by-id` (пометить прочитанным), `create-chat` (дедуп)
-- [x] `send-message` (multipart), `delete-message` (только отправитель, сохранить опечатку `massageId`), `delete-chat` (участник)
-- [x] SignalR `ChatHub`: доставка/отправка сообщений в реальном времени
+## Phase 20 — Двухфакторная аутентификация (TOTP + email-код + backup codes) · §11
+- [ ] `User.TwoFactorEnabled`, `User.TwoFactorSecret`; сущность `BackupCode { Id, UserId, CodeHash, IsUsed }`
+- [ ] TOTP через `Otp.NET`/Identity: генерация секрета, `otpauth://`-URI + строка для QR
+- [ ] Email-код (6 цифр, TTL 5–10 мин); пачка одноразовых резервных кодов при включении
+- [ ] Флоу логина: `/Account/login` при 2FA возвращает `twoFactorToken` (не JWT); `POST /Account/login-2fa { twoFactorToken, code, method(Totp/Email/Backup) }` → JWT
+- [ ] Управление: `POST /enable-2fa`, `POST /confirm-2fa?code`, `POST /disable-2fa?code`, `POST /send-2fa-email`, `POST /regenerate-backup-codes`
+- [ ] Миграция
 
-## Phase 9 — Локации и поиск
-> Цель: справочник локаций (независимая фича).
+## Phase 21 — Explore / рекомендации (content-based) · §12
+- [ ] Профиль интересов: сущность `UserInterest` (агрегат) или расчёт на лету; веса действий (favorite > comment > like > view) + затухание по времени
+- [ ] Агрегация любимых хэштегов и авторов из взаимодействий
+- [ ] Скоринг кандидатов: `score = w1·хэштеги + w2·близость_автора + w3·популярность + w4·свежесть`
+- [ ] Фильтры: свои посты, уже просмотренные (`PostView`), блок в любую сторону, приватные без `Accepted`, авторы на которых уже подписан
+- [ ] Разнообразие: не более N подряд от одного автора, перемешивание топа
+- [ ] Эндпоинты: `GET /Explore/get-feed`, `GET /Explore/get-popular` (cold start)
+- [ ] Миграция (если `UserInterest` материализуется)
 
-- [x] Location CRUD + фильтр/пагинация (`get-Locations`, `get-Location-by-id`, `add`, `update`, `delete`)
-- [x] Проверить, что все search-history эндпоинты User завершены (Phase 5)
-
-## Phase 10 — Качество, харденинг и документация
-> Цель: production-ready, всё проверено и задокументировано.
-
-- [x] Аудит авторизации владельца по всем ресурсам (посты/комменты/сторис/сообщения)
-- [x] Аудит пагинации везде, где есть PageNumber/PageSize
-- [x] Ревизия сообщений валидации
-- [x] Проверка глобальной обработки ошибок
-- [x] Полный README (setup, миграции, connection string, `dotnet run`, список эндпоинтов)
-- [x] Ручной smoke-тест всех групп эндпоинтов (на живом PostgreSQL Render — 12/12 PASS)
-- [x] Финальная сборка без предупреждений
+## Phase 22 — Качество, харденинг, документация (фичи) · §13
+- [ ] Сквозная проверка блокировок и приватности во всех новых и затронутых выдачах
+- [ ] Ревизия: не создаются уведомления/mention на собственные действия
+- [ ] Ревизия авторизации владельца/ролей/групп-ролей
+- [ ] Пагинация и валидаторы на всех новых списках/DTO; безопасная загрузка voice/аватара группы
+- [ ] Обновить сид: роли, приватный аккаунт, группа, тестовые уведомления/хэштеги
+- [ ] Swagger: теги новых контроллеров, описания
+- [ ] Обновить README: новые эндпоинты и фичи
+- [ ] Ручной smoke-тест новых групп эндпоинтов (на живом PostgreSQL)
+- [ ] Финальная сборка без предупреждений

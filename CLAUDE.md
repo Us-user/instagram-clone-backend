@@ -2,8 +2,11 @@
 
 ## Что это
 Production-ready бэкенд Instagram-клона на **C# / ASP.NET Core 8 + PostgreSQL**.
-Полное ТЗ — источник истины: [`instagram-backend-prompt.md`](./instagram-backend-prompt.md).
-Строим точно по контракту API (пути, методы, параметры, DTO воспроизводить дословно).
+ТЗ — источники истины:
+- **База (Phase 0–10, готово):** [`instagram-backend-prompt.md`](./instagram-backend-prompt.md).
+- **Новые фичи (Phase 11+, текущая работа):** [`instagram-backend-features-prompt.md`](./instagram-backend-features-prompt.md) — уведомления, приватность/блокировки, хэштеги/упоминания, ответы+лайки комментов, групповые чаты, реакции/reply/forward/voice, close friends/ответы/репост сторис, presence/typing, верификация, 2FA, Explore.
+
+Строим точно по контракту API (пути, методы, параметры, DTO воспроизводить дословно). Существующий контракт базы не ломаем — только расширяем необязательными полями.
 
 ## Стек
 ASP.NET Core 8 Web API · EF Core 8 + Npgsql · ASP.NET Core Identity (`IdentityUser<string>`) ·
