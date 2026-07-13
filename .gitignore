@@ -15,8 +15,8 @@ artifacts/
 
 # EF Core (keep Migrations/ — do NOT ignore)
 # uploaded runtime files
-wwwroot/images/*
-!wwwroot/images/.gitkeep
+**/wwwroot/images/*
+!**/wwwroot/images/.gitkeep
 
 # Secrets / local config
 appsettings.Development.json

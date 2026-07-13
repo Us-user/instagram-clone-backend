@@ -10,24 +10,24 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 0 — Foundation
-- **Последняя сессия:** — (проект только инициализирован)
-- **Следующий шаг:** создать структуру решения (Phase 0)
-- **Состояние сборки:** нет кода
+- **Активная фаза:** Phase 1 — Доменная модель
+- **Последняя сессия:** 2026-07-13 (02)
+- **Следующий шаг:** Phase 1 — Enum `Gender`, `Response<T>`/`PagedResponse<T>`, сущности и DTO из контракта
+- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors); приложение запускается, Swagger отвечает (проверено)
 
 ---
 
 ## Phase 0 — Фундамент и инструментарий
 > Цель: компилируемое пустое решение со слоистой архитектурой, которое запускается.
 
-- [ ] Создать solution `InstagramClone.sln`
-- [ ] Проекты: `Domain` (classlib), `Infrastructure` (classlib), `WebApi` (web)
-- [ ] Ссылки: Infrastructure → Domain, WebApi → Infrastructure & Domain
-- [ ] NuGet: EF Core 8, Npgsql, Identity, JWT Bearer, AutoMapper, FluentValidation, Swashbuckle, SignalR
-- [ ] `appsettings.json` с плейсхолдерами (ConnectionString PostgreSQL, Jwt: Issuer/Audience/Key/Lifetime)
-- [ ] Минимальный `Program.cs`, который запускается
-- [ ] `wwwroot/images` + отдача статики
-- [ ] Скелет README
+- [x] Создать solution `InstagramClone.sln`
+- [x] Проекты: `Domain` (classlib), `Infrastructure` (classlib), `WebApi` (web)
+- [x] Ссылки: Infrastructure → Domain, WebApi → Infrastructure & Domain
+- [x] NuGet: EF Core 8, Npgsql, Identity, JWT Bearer, AutoMapper, FluentValidation, Swashbuckle, SignalR
+- [x] `appsettings.json` с плейсхолдерами (ConnectionString PostgreSQL, Jwt: Issuer/Audience/Key/Lifetime)
+- [x] Минимальный `Program.cs`, который запускается
+- [x] `wwwroot/images` + отдача статики
+- [x] Скелет README
 
 ## Phase 1 — Доменная модель (Entities, Enums, DTO, Responses)
 > Цель: все доменные типы компилируются.
