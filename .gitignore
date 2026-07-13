@@ -1,0 +1,35 @@
+# .NET
+bin/
+obj/
+out/
+*.user
+*.suo
+.vs/
+*.userprefs
+
+# Build / publish
+publish/
+artifacts/
+[Dd]ebug/
+[Rr]elease/
+
+# EF Core (keep Migrations/ — do NOT ignore)
+# uploaded runtime files
+wwwroot/images/*
+!wwwroot/images/.gitkeep
+
+# Secrets / local config
+appsettings.Development.json
+appsettings.Local.json
+*.env
+.env
+
+# IDE / OS
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
