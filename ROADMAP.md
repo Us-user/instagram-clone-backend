@@ -13,10 +13,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 11 — Уведомления (Notifications + NotificationHub) — **не начата**. Стартует блок новых фич (`instagram-backend-features-prompt.md`).
-- **Последняя сессия:** 2026-07-14 (14) — составлен роадмап новых фич, переработаны `/start` и `/stop`.
-- **Следующий шаг:** начать Phase 11 — сущность `Notification`, `NotificationService`, `NotificationHub` (SignalR), 5 эндпоинтов, автосоздание уведомлений из лайков/комментов/подписок, миграция.
-- **Состояние сборки:** 🟢 зелёная (база 0–10 завершена, 57 эндпоинтов, smoke-тест на живом PostgreSQL 12/12 PASS).
+- **Активная фаза:** Phase 12 — Приватность (приватные аккаунты, follow requests, блокировки, настройки) — **не начата**. Phase 11 (Уведомления) завершена.
+- **Последняя сессия:** 2026-07-14 (15) — реализована Phase 11: `Notification` + enum'ы, `NotificationService` с группировкой, `NotificationHub` (SignalR), 5 эндпоинтов `/Notification/*`, проводка Like/Comment/Follow, поле `User.IsVerified`, миграция `AddNotifications`, сид-уведомления.
+- **Следующий шаг:** начать Phase 12 — `User.IsPrivate` + `PrivacySettings`, `FollowingRelationShip.Status (Pending/Accepted)`, follow requests, сущность `Block` + `BlockService`, приватный профиль, `/Settings/*`, фильтрация блокировок в существующих выдачах, миграция.
+- **Состояние сборки:** 🟢 зелёная (0 предупреждений; база 62 эндпоинта: 57 + 5 уведомлений). Живой smoke-тест на PostgreSQL в эту сессию не гонялся (нет доступа к `DATABASE_URL`), запускается при деплое.
 
 ## ⚠️ Инварианты для всех новых фаз (не нарушать)
 1. **Обратная совместимость.** Существующие эндпоинты базы по контракту не менять — только расширять **необязательными** полями (напр. `parentCommentId`). Сохранять оригинальные опечатки контракта (`massageId`).
@@ -56,15 +56,15 @@
 ## Phase 11 — Уведомления (Notifications + NotificationHub) · §2
 > Кросс-срезовый сервис: строим первым, чтобы последующие фазы сразу подключали свои уведомления.
 
-- [ ] Сущность `Notification { Id, RecipientUserId, ActorUserId, Type, EntityType, EntityId?, IsRead, CreatedAt }`
-- [ ] Enum `NotificationType { Like, Follow, Comment, Mention, CommentReply, CommentLike, FollowRequest, FollowRequestAccepted, StoryReply, PostShared }`
-- [ ] Enum `NotificationEntityType { Post, Comment, Story, User }`
-- [ ] EF-конфигурация + индексы, миграция
-- [ ] `INotificationService` + `NotificationService`: create (с проверкой «не себе»), выдача с **группировкой** по `(Type, EntityType, EntityId)` за окно времени (actors: первые 2–3 + счётчик), unread-count, mark-as-read/all, delete
-- [ ] `NotificationHub` (SignalR) + `INotificationNotifier` → событие `ReceiveNotification` (live «звоночек» и счётчик)
-- [ ] Эндпоинты: `GET /Notification/get-notifications`, `GET /Notification/get-unread-count`, `PUT /Notification/mark-as-read?id`, `PUT /Notification/mark-all-as-read`, `DELETE /Notification/delete-notification?id`
-- [ ] Проводка существующих действий: уведомления `Like` (лайк поста), `Comment`, `Follow` — из соответствующих сервисов
-- [ ] AutoMapper-профиль, валидаторы, регистрация в DI
+- [x] Сущность `Notification { Id, RecipientUserId, ActorUserId, Type, EntityType, EntityId?, IsRead, CreatedAt }`
+- [x] Enum `NotificationType { Like, Follow, Comment, Mention, CommentReply, CommentLike, FollowRequest, FollowRequestAccepted, StoryReply, PostShared }`
+- [x] Enum `NotificationEntityType { Post, Comment, Story, User }`
+- [x] EF-конфигурация + индексы, миграция (`AddNotifications`; заодно добавлено `User.IsVerified` для честного `isVerified` в actor-DTO)
+- [x] `INotificationService` + `NotificationService`: create (с проверкой «не себе»), выдача с **группировкой** по `(Type, EntityType, EntityId)` за окно 24ч (actors: первые 3 + счётчик), unread-count, mark-as-read/all, delete
+- [x] `NotificationHub` (SignalR) + `INotificationNotifier`/`NotificationNotifier` → событие `ReceiveNotification` (live «звоночек» и счётчик); токен для хаба из `access_token`
+- [x] Эндпоинты: `GET /Notification/get-notifications`, `GET /Notification/get-unread-count`, `PUT /Notification/mark-as-read?id`, `PUT /Notification/mark-all-as-read`, `DELETE /Notification/delete-notification?id`
+- [x] Проводка существующих действий: уведомления `Like` (лайк поста), `Comment`, `Follow` — из `PostService`/`FollowingRelationShipService`
+- [x] Регистрация в DI (`INotificationService`, `INotificationNotifier`). AutoMapper-профиль и валидаторы не потребовались: DTO собирается вручную (кастомная группировка, как в `ChatService`), входные параметры — только query
 
 ## Phase 12 — Приватность: приватные аккаунты, follow requests, блокировка, настройки · §6
 > Кросс-срезовый фундамент для упоминаний, чата, сторис, explore.

@@ -24,6 +24,12 @@ public class User : IdentityUser<string>
     /// <summary>Имя файла аватара в wwwroot/images (nullable).</summary>
     public string? Avatar { get; set; }
 
+    /// <summary>
+    /// Верифицирован ли аккаунт («синяя галочка»). Ставится/снимается администратором
+    /// (Phase 19). Отдаётся во всех DTO пользователя/автора для отрисовки галочки.
+    /// </summary>
+    public bool IsVerified { get; set; }
+
     // Навигации
     public UserProfile? UserProfile { get; set; }
     public List<Post> Posts { get; set; } = new();

@@ -1,5 +1,6 @@
 using Domain.DTOs.User;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Exceptions;
 using Domain.Responses;
 using Infrastructure.Data;
@@ -16,11 +17,16 @@ public class FollowingRelationShipService : IFollowingRelationShipService
 {
     private readonly DataContext _context;
     private readonly ICurrentUserService _currentUser;
+    private readonly INotificationService _notifications;
 
-    public FollowingRelationShipService(DataContext context, ICurrentUserService currentUser)
+    public FollowingRelationShipService(
+        DataContext context,
+        ICurrentUserService currentUser,
+        INotificationService notifications)
     {
         _context = context;
         _currentUser = currentUser;
+        _notifications = notifications;
     }
 
     public async Task<Response<List<GetUserDto>>> GetSubscribersAsync(string? userId)
@@ -93,6 +99,10 @@ public class FollowingRelationShipService : IFollowingRelationShipService
             CreatedAt = DateTime.UtcNow
         });
         await _context.SaveChangesAsync();
+
+        // Уведомление о новой подписке адресату (тип Follow, объект — пользователь).
+        await _notifications.CreateAsync(
+            followingUserId, currentId, NotificationType.Follow, NotificationEntityType.User, null);
 
         return new Response<bool>(true);
     }

@@ -63,6 +63,7 @@ public static class DependencyInjection
         services.AddScoped<IStoryService, StoryService>();
         services.AddScoped<IChatService, ChatService>();
         services.AddScoped<ILocationService, LocationService>();
+        services.AddScoped<INotificationService, NotificationService>();
 
         // AutoMapper: профили из этой сборки.
         services.AddAutoMapper(typeof(MappingProfile).Assembly);

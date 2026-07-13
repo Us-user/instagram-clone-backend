@@ -36,6 +36,8 @@ public class DataContext : IdentityDbContext<User, IdentityRole, string>
     public DbSet<SearchHistory> SearchHistories => Set<SearchHistory>();
     public DbSet<UserSearchHistory> UserSearchHistories => Set<UserSearchHistory>();
 
+    public DbSet<Notification> Notifications => Set<Notification>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

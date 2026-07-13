@@ -15,5 +15,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.Avatar)
             .HasMaxLength(512);
+
+        builder.Property(u => u.IsVerified)
+            .HasDefaultValue(false);
     }
 }

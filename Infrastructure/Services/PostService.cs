@@ -1,5 +1,6 @@
 using Domain.DTOs.Post;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Exceptions;
 using Domain.Responses;
 using FluentValidation;
@@ -20,6 +21,7 @@ public class PostService : IPostService
     private readonly DataContext _context;
     private readonly ICurrentUserService _currentUser;
     private readonly IFileService _fileService;
+    private readonly INotificationService _notifications;
     private readonly IValidator<AddPostCommentDto> _commentValidator;
     private readonly IValidator<AddPostFavoriteDto> _favoriteValidator;
 
@@ -27,12 +29,14 @@ public class PostService : IPostService
         DataContext context,
         ICurrentUserService currentUser,
         IFileService fileService,
+        INotificationService notifications,
         IValidator<AddPostCommentDto> commentValidator,
         IValidator<AddPostFavoriteDto> favoriteValidator)
     {
         _context = context;
         _currentUser = currentUser;
         _fileService = fileService;
+        _notifications = notifications;
         _commentValidator = commentValidator;
         _favoriteValidator = favoriteValidator;
     }
@@ -183,7 +187,7 @@ public class PostService : IPostService
             throw new BadRequestException("Некорректный Id поста.");
 
         var currentId = _currentUser.GetRequiredUserId();
-        await EnsurePostExistsAsync(postId.Value);
+        var ownerId = await GetPostOwnerAsync(postId.Value);
 
         var existing = await _context.PostLikes
             .FirstOrDefaultAsync(l => l.PostId == postId && l.UserId == currentId);
@@ -206,6 +210,13 @@ public class PostService : IPostService
         }
 
         await _context.SaveChangesAsync();
+
+        // Уведомление автору поста только при постановке лайка (не при снятии). «Не себе»
+        // отсекается внутри NotificationService.
+        if (liked)
+            await _notifications.CreateAsync(
+                ownerId, currentId, NotificationType.Like, NotificationEntityType.Post, postId.Value);
+
         return new Response<bool>(liked);
     }
 
@@ -239,7 +250,7 @@ public class PostService : IPostService
         await _commentValidator.ValidateAndThrowAsync(dto);
 
         var currentId = _currentUser.GetRequiredUserId();
-        await EnsurePostExistsAsync(dto.PostId);
+        var ownerId = await GetPostOwnerAsync(dto.PostId);
 
         var comment = new PostComment
         {
@@ -251,6 +262,10 @@ public class PostService : IPostService
 
         _context.PostComments.Add(comment);
         await _context.SaveChangesAsync();
+
+        // Уведомление автору поста о новом комментарии («не себе» отсекается в сервисе).
+        await _notifications.CreateAsync(
+            ownerId, currentId, NotificationType.Comment, NotificationEntityType.Post, dto.PostId);
 
         var result = await _context.PostComments.AsNoTracking()
             .Where(c => c.Id == comment.Id)
@@ -341,5 +356,19 @@ public class PostService : IPostService
         var exists = await _context.Posts.AnyAsync(p => p.Id == postId);
         if (!exists)
             throw new NotFoundException("Пост не найден.");
+    }
+
+    /// <summary>
+    /// Возвращает Id автора поста (для адресации уведомления); иначе
+    /// <see cref="NotFoundException"/> (404) — заодно проверяет существование поста.
+    /// </summary>
+    private async Task<string> GetPostOwnerAsync(int postId)
+    {
+        var ownerId = await _context.Posts.AsNoTracking()
+            .Where(p => p.Id == postId)
+            .Select(p => p.UserId)
+            .FirstOrDefaultAsync();
+
+        return ownerId ?? throw new NotFoundException("Пост не найден.");
     }
 }

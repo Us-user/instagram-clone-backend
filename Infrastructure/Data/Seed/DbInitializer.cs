@@ -63,13 +63,18 @@ public static class DbInitializer
                 (alice, admin), (alice, bob), (bob, alice), (carol, alice));
 
             // 5. Пара тестовых постов с лайком и комментарием (без изображений).
-            await SeedPostsAsync(context, alice, bob, admin);
+            var alicePost = await SeedPostsAsync(context, alice, bob, admin);
 
             await context.SaveChangesAsync();
-            logger.LogInformation("Seed: тестовые пользователи, подписки и посты созданы");
+
+            // 6. Тестовые уведомления (после SaveChanges — нужны сгенерированные Id постов).
+            SeedNotifications(context, alicePost, alice, bob, admin, carol);
+
+            await context.SaveChangesAsync();
+            logger.LogInformation("Seed: тестовые пользователи, подписки, посты и уведомления созданы");
         }
 
-        // 6. Справочник локаций.
+        // 7. Справочник локаций.
         if (!await context.Locations.AnyAsync())
         {
             context.Locations.AddRange(
@@ -142,7 +147,7 @@ public static class DbInitializer
         await Task.CompletedTask;
     }
 
-    private static async Task SeedPostsAsync(DataContext context, User alice, User bob, User admin)
+    private static async Task<Post> SeedPostsAsync(DataContext context, User alice, User bob, User admin)
     {
         var alicePost = new Post
         {
@@ -166,5 +171,56 @@ public static class DbInitializer
 
         context.Posts.AddRange(alicePost, bobReel);
         await Task.CompletedTask;
+        return alicePost;
+    }
+
+    /// <summary>
+    /// Тестовые уведомления для alice: подписки (bob, carol), лайк (bob) и комментарий (admin)
+    /// к её посту — соответствуют засеянным связям/взаимодействиям. Правило «не себе» соблюдено.
+    /// </summary>
+    private static void SeedNotifications(
+        DataContext context, Post alicePost, User alice, User bob, User admin, User carol)
+    {
+        context.Notifications.AddRange(
+            new Notification
+            {
+                RecipientUserId = alice.Id,
+                ActorUserId = bob.Id,
+                Type = NotificationType.Follow,
+                EntityType = NotificationEntityType.User,
+                EntityId = null,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow.AddHours(-4)
+            },
+            new Notification
+            {
+                RecipientUserId = alice.Id,
+                ActorUserId = carol.Id,
+                Type = NotificationType.Follow,
+                EntityType = NotificationEntityType.User,
+                EntityId = null,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow.AddHours(-3)
+            },
+            new Notification
+            {
+                RecipientUserId = alice.Id,
+                ActorUserId = bob.Id,
+                Type = NotificationType.Like,
+                EntityType = NotificationEntityType.Post,
+                EntityId = alicePost.Id,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow.AddHours(-2)
+            },
+            new Notification
+            {
+                RecipientUserId = alice.Id,
+                ActorUserId = admin.Id,
+                Type = NotificationType.Comment,
+                EntityType = NotificationEntityType.Post,
+                EntityId = alicePost.Id,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow.AddHours(-1)
+            });
     }
 }
