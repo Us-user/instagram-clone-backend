@@ -10,10 +10,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 7 — Сторис
-- **Последняя сессия:** 2026-07-13 (08)
-- **Следующий шаг:** Phase 7 — `StoryService` + `StoryController`: `AddStories` (из поста `PostId` или файла, multipart), `DeleteStory` (только автор), ленты `get-stories` (активные <24ч, сгруппированы по авторам-подпискам), `get-user-stories/{userId}`, `get-my-stories`, `LikeStory`, `GetStoryById` (`GetStoryDto` + `viewerDto`), `add-story-view` (уникально на юзера → `GetStoryViewDto`). Переиспользовать `IFileService`, `Pagination`, окно 24ч (`CreatedAt > UtcNow.AddHours(-24)`).
-- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Phase 6 завершена: 12 эндпоинтов `Post` видны в swagger с дословными путями контракта, все возвращают 401 без токена; `add-post` смоделирован как `multipart/form-data` (Title/Content/IsReel/Images[]). Проекция `Post → GetPostDto` вынесена в общий `PostProjections.ToDto` (переиспользована и в `UserProfileService`). DB-пути требуют запущенного PostgreSQL (авто-миграция при старте корректно ловится).
+- **Активная фаза:** Phase 8 — Чат и SignalR
+- **Последняя сессия:** 2026-07-13 (09)
+- **Следующий шаг:** Phase 8 — `ChatService` + `ChatController` + SignalR `ChatHub`: `get-chats` (последнее сообщение + непрочитанные), `get-chat-by-id` (пометить прочитанным), `create-chat` (дедуп), `send-message` (multipart PUT: ChatId/MessageText/File + рассылка через SignalR), `delete-message?massageId` (сохранить опечатку контракта; только отправитель), `delete-chat` (участник). Переиспользовать `IFileService`, `ICurrentUserService`; проверять членство в чате.
+- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Phase 7 завершена: 8 эндпоинтов `Story` видны в swagger с дословными путями контракта (включая PascalCase `AddStories`/`DeleteStory`/`LikeStory`/`GetStoryById`), все защищённые возвращают 401 без токена; `AddStories` смоделирован как `postId` (query) + `multipart/form-data` (Image). Проекция `Story → GetStoryDto` вынесена в общий `StoryProjections.ToDto` (для сторис из поста `FileName` берётся из первого изображения поста-источника). Окно активности 24ч (`CreatedAt > UtcNow.AddHours(-24)`) применяется во всех выборках сторис. DB-пути требуют запущенного PostgreSQL (авто-миграция при старте корректно ловится).
 
 ---
 
@@ -87,9 +87,9 @@
 ## Phase 7 — Сторис
 > Цель: сторис с жизнью 24ч, лайки/просмотры/вьюеры.
 
-- [ ] `AddStories` (из поста или файла), `DeleteStory` (только автор)
-- [ ] `get-stories` (активные <24ч, сгруппированы по авторам), `get-user-stories/{userId}`, `get-my-stories`
-- [ ] `LikeStory`, `GetStoryById` (viewerDto), `add-story-view` (уникально на юзера)
+- [x] `AddStories` (из поста или файла), `DeleteStory` (только автор)
+- [x] `get-stories` (активные <24ч, сгруппированы по авторам), `get-user-stories/{userId}`, `get-my-stories`
+- [x] `LikeStory`, `GetStoryById` (viewerDto), `add-story-view` (уникально на юзера)
 
 ## Phase 8 — Чат и SignalR
 > Цель: чаты и сообщения в реальном времени.
