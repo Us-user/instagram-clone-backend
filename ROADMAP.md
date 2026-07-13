@@ -10,10 +10,10 @@
 - `[x]` — готово
 
 ## 📍 Текущий статус
-- **Активная фаза:** Phase 3 — Сквозная инфраструктура (JWT, обработка ошибок, файлы, AutoMapper, FluentValidation, Swagger)
-- **Последняя сессия:** 2026-07-13 (04)
-- **Следующий шаг:** Phase 3 — JWT token service + Program.cs (аутентификация/авторизация), глобальный exception-middleware → `Response<T>`, file storage service, базовые профили AutoMapper, подключение FluentValidation, Swagger с Bearer, доступ к текущему юзеру из claims
-- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Миграция `InitialCreate` создана; применение к БД требует запущенного PostgreSQL.
+- **Активная фаза:** Phase 4 — Аутентификация и Account (register/login/пароли, выдача JWT)
+- **Последняя сессия:** 2026-07-13 (05)
+- **Следующий шаг:** Phase 4 — Account service + controller (`register`, `login`, `ForgotPassword`, `ResetPassword`, `ChangePassword`) поверх готовой инфраструктуры (ITokenService, валидаторы Register/Login уже есть); при регистрации создавать пустой UserProfile; `[AllowAnonymous]` на register/login
+- **Состояние сборки:** 🟢 зелёная (0 warnings, 0 errors). Приложение стартует, Swagger отдаёт Bearer-схему; применение миграции к БД требует запущенного PostgreSQL.
 
 ---
 
@@ -53,14 +53,14 @@
 ## Phase 3 — Сквозная инфраструктура
 > Цель: общие сервисы, которыми пользуются все фичи.
 
-- [ ] JWT token service + конфигурация (claims: userId, userName, email, role)
-- [ ] Глобальный middleware обработки исключений → `Response<T>` со statusCode/errors
-- [ ] File storage service (сохранение/удаление, проверка расширения/размера, Guid-имена)
-- [ ] Базовые профили AutoMapper
-- [ ] Подключение FluentValidation + базовые валидаторы
-- [ ] Swagger с Bearer-кнопкой, XML-комментариями, группировкой по тегам
-- [ ] Доступ к текущему юзеру из claims (не из параметров)
-- [ ] CORS AllowAll (dev)
+- [x] JWT token service + конфигурация (claims: userId, userName, email, role)
+- [x] Глобальный middleware обработки исключений → `Response<T>` со statusCode/errors
+- [x] File storage service (сохранение/удаление, проверка расширения/размера, Guid-имена)
+- [x] Базовые профили AutoMapper
+- [x] Подключение FluentValidation + базовые валидаторы
+- [x] Swagger с Bearer-кнопкой, XML-комментариями, группировкой по тегам
+- [x] Доступ к текущему юзеру из claims (не из параметров)
+- [x] CORS AllowAll (dev)
 
 ## Phase 4 — Аутентификация и Account
 > Цель: регистрация/вход/пароли работают, выдаётся JWT.

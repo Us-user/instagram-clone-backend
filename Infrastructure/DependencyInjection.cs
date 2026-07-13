@@ -1,5 +1,11 @@
 using Domain.Entities;
+using FluentValidation;
 using Infrastructure.Data;
+using Infrastructure.Mapping;
+using Infrastructure.Options;
+using Infrastructure.Services;
+using Infrastructure.Services.Interfaces;
+using Infrastructure.Validators.Account;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -8,8 +14,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Infrastructure;
 
 /// <summary>
-/// Регистрация сервисов слоя Infrastructure (DbContext + ядро Identity).
-/// JWT-аутентификация и SignInManager подключаются в WebApi на этапе аутентификации.
+/// Регистрация сервисов слоя Infrastructure: DbContext, ядро Identity, сквозные сервисы
+/// (токены, файлы, текущий пользователь), AutoMapper и FluentValidation-валидаторы.
+/// Схема JWT-аутентификации подключается в WebApi (пакет JwtBearer живёт там).
 /// </summary>
 public static class DependencyInjection
 {
@@ -34,6 +41,23 @@ public static class DependencyInjection
             .AddRoles<IdentityRole>()
             .AddEntityFrameworkStores<DataContext>()
             .AddDefaultTokenProviders();
+
+        // Параметры JWT из секции "Jwt".
+        services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+
+        // Доступ к HttpContext для чтения claim'ов текущего пользователя.
+        services.AddHttpContextAccessor();
+
+        // Сквозные сервисы.
+        services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<IFileService, FileService>();
+
+        // AutoMapper: профили из этой сборки.
+        services.AddAutoMapper(typeof(MappingProfile).Assembly);
+
+        // FluentValidation: все валидаторы из этой сборки.
+        services.AddValidatorsFromAssemblyContaining<RegisterDtoValidator>();
 
         return services;
     }

@@ -1,25 +1,22 @@
 using Infrastructure;
 using Infrastructure.Data.Seed;
-using Microsoft.OpenApi.Models;
+using WebApi.Extensions;
+using WebApi.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Сервисы ──────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
 
-// Слой данных: DbContext (PostgreSQL) + ядро Identity.
+// Слой данных + сквозные сервисы (DbContext, Identity, токены, файлы, текущий юзер,
+// AutoMapper, FluentValidation).
 builder.Services.AddInfrastructure(builder.Configuration);
 
-builder.Services.AddSwaggerGen(options =>
-{
-    options.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "Instagram Clone API",
-        Version = "v1",
-        Description = "Production-ready бэкенд Instagram-клона (ASP.NET Core 8 + PostgreSQL)."
-    });
-});
+// JWT-аутентификация + авторизация (все эндпоинты защищены по умолчанию).
+builder.Services.AddJwtAuthentication(builder.Configuration);
+
+// Swagger с кнопкой Bearer-авторизации и XML-комментариями.
+builder.Services.AddSwaggerWithBearer();
 
 // CORS: для разработки разрешаем всё (правило из ТЗ).
 builder.Services.AddCors(options =>
@@ -46,6 +43,9 @@ using (var scope = app.Services.CreateScope())
 }
 
 // ── Конвейер обработки запросов ───────────────────────────────────────────────
+// Глобальная обработка исключений — первым, чтобы ловить ошибки всего конвейера.
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -60,6 +60,7 @@ app.UseStaticFiles();
 
 app.UseCors("AllowAll");
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
