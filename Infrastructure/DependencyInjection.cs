@@ -68,6 +68,7 @@ public static class DependencyInjection
         services.AddScoped<ISettingsService, SettingsService>();
         services.AddScoped<IHashtagService, HashtagService>();
         services.AddScoped<IMentionService, MentionService>();
+        services.AddScoped<IGroupChatService, GroupChatService>();
 
         // AutoMapper: профили из этой сборки.
         services.AddAutoMapper(typeof(MappingProfile).Assembly);

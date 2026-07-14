@@ -21,6 +21,7 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<IUserIdProvider, CustomUserIdProvider>();
 builder.Services.AddScoped<IChatNotifier, ChatNotifier>();
 builder.Services.AddScoped<INotificationNotifier, NotificationNotifier>();
+builder.Services.AddScoped<IGroupChatNotifier, GroupChatNotifier>();
 
 // JWT-аутентификация + авторизация (все эндпоинты защищены по умолчанию).
 builder.Services.AddJwtAuthentication(builder.Configuration);
@@ -76,5 +77,6 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ChatHub>("/chatHub");
 app.MapHub<NotificationHub>("/notificationHub");
+app.MapHub<GroupChatHub>("/groupChatHub");
 
 app.Run();

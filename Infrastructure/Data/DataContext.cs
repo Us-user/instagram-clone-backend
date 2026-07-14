@@ -46,6 +46,10 @@ public class DataContext : IdentityDbContext<User, IdentityRole, string>
     public DbSet<PostHashtag> PostHashtags => Set<PostHashtag>();
     public DbSet<Mention> Mentions => Set<Mention>();
 
+    public DbSet<GroupChat> GroupChats => Set<GroupChat>();
+    public DbSet<GroupChatMember> GroupChatMembers => Set<GroupChatMember>();
+    public DbSet<GroupMessage> GroupMessages => Set<GroupMessage>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

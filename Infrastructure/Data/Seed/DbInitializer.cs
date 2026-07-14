@@ -111,8 +111,11 @@ public static class DbInitializer
             // 7. Тестовые уведомления (после SaveChanges — нужны сгенерированные Id постов/комментов).
             SeedNotifications(context, alicePost, adminComment, reply, alice, bob, admin, carol, diana);
 
+            // 8. Пример группового чата (Phase 15): admin (Admin) + alice, bob (Member).
+            SeedGroupChat(context, admin, alice, bob);
+
             await context.SaveChangesAsync();
-            logger.LogInformation("Seed: тестовые пользователи, подписки, посты, хэштеги, упоминания и уведомления созданы");
+            logger.LogInformation("Seed: тестовые пользователи, подписки, посты, хэштеги, упоминания, уведомления и группа созданы");
         }
 
         // 7. Справочник локаций.
@@ -253,6 +256,48 @@ public static class DbInitializer
         context.Posts.AddRange(alicePost, bobReel);
         await Task.CompletedTask;
         return (alicePost, adminComment, reply);
+    }
+
+    /// <summary>
+    /// Пример группового чата (Phase 15): создатель <paramref name="admin"/> — Admin, alice и bob —
+    /// Member. Лента начинается со служебных сообщений (создал/добавил), затем пара текстовых и
+    /// ответ (reply). Весь граф добавляется в контекст; Id проставляются на общем SaveChanges.
+    /// </summary>
+    private static void SeedGroupChat(DataContext context, User admin, User alice, User bob)
+    {
+        var createdAt = DateTime.UtcNow.AddHours(-2);
+
+        var aliceHi = new GroupMessage
+        {
+            SenderUserId = alice.Id,
+            MessageText = "Привет всем!",
+            MessageType = MessageType.Text,
+            CreatedAt = createdAt.AddMinutes(15)
+        };
+
+        var group = new GroupChat
+        {
+            Name = "Команда проекта",
+            CreatorUserId = admin.Id,
+            CreatedAt = createdAt,
+            Members =
+            {
+                new GroupChatMember { UserId = admin.Id, Role = GroupMemberRole.Admin, JoinedAt = createdAt, LastReadAt = createdAt.AddMinutes(20) },
+                new GroupChatMember { UserId = alice.Id, Role = GroupMemberRole.Member, JoinedAt = createdAt, LastReadAt = createdAt.AddMinutes(15) },
+                new GroupChatMember { UserId = bob.Id, Role = GroupMemberRole.Member, JoinedAt = createdAt }
+            },
+            Messages =
+            {
+                new GroupMessage { SenderUserId = null, MessageText = "admin создал группу", MessageType = MessageType.System, CreatedAt = createdAt },
+                new GroupMessage { SenderUserId = null, MessageText = "admin добавил alice", MessageType = MessageType.System, CreatedAt = createdAt.AddSeconds(1) },
+                new GroupMessage { SenderUserId = null, MessageText = "admin добавил bob", MessageType = MessageType.System, CreatedAt = createdAt.AddSeconds(2) },
+                new GroupMessage { SenderUserId = admin.Id, MessageText = "Всем привет! 👋 Здесь обсуждаем проект.", MessageType = MessageType.Text, CreatedAt = createdAt.AddMinutes(10) },
+                aliceHi,
+                new GroupMessage { SenderUserId = bob.Id, MessageText = "@alice и тебе привет!", MessageType = MessageType.Text, ReplyToMessage = aliceHi, CreatedAt = createdAt.AddMinutes(18) }
+            }
+        };
+
+        context.GroupChats.Add(group);
     }
 
     /// <summary>
