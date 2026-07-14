@@ -1,5 +1,6 @@
 using Domain.DTOs.GroupChat;
 using Domain.DTOs.Message;
+using Domain.DTOs.Presence;
 
 namespace WebApi.Hubs;
 
@@ -11,4 +12,7 @@ public interface IGroupChatClient
 
     /// <summary>Доставка обновлённого набора реакций сообщения группы (§8).</summary>
     Task ReceiveReaction(MessageReactionsDto reactions);
+
+    /// <summary>Актуальный список печатающих в группе (§1): «X и ещё N печатают…».</summary>
+    Task GroupTyping(GroupTypingDto typing);
 }

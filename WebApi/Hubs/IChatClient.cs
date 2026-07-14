@@ -1,5 +1,6 @@
 using Domain.DTOs.Chat;
 using Domain.DTOs.Message;
+using Domain.DTOs.Presence;
 
 namespace WebApi.Hubs;
 
@@ -11,4 +12,7 @@ public interface IChatClient
 
     /// <summary>Доставка обновлённого набора реакций сообщения (§8).</summary>
     Task ReceiveReaction(MessageReactionsDto reactions);
+
+    /// <summary>Событие «печатает…»/«записывает голосовое…» от собеседника в личном чате (§1).</summary>
+    Task UserTyping(TypingDto typing);
 }

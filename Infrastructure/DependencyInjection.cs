@@ -71,6 +71,13 @@ public static class DependencyInjection
         services.AddScoped<IHashtagService, HashtagService>();
         services.AddScoped<IMentionService, MentionService>();
         services.AddScoped<IGroupChatService, GroupChatService>();
+        services.AddScoped<IPresenceService, PresenceService>();
+        services.AddScoped<ITypingService, TypingService>();
+
+        // Presence/typing (§1): состояние присутствия и «печатает…» — эфемерное, живёт в памяти
+        // между всеми соединениями, поэтому singleton (реализация SignalR-рассылки — в WebApi).
+        services.AddSingleton<IPresenceTracker, PresenceTracker>();
+        services.AddSingleton<ITypingTracker, TypingTracker>();
 
         // AutoMapper: профили из этой сборки.
         services.AddAutoMapper(typeof(MappingProfile).Assembly);

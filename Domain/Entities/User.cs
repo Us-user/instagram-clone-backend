@@ -37,6 +37,14 @@ public class User : IdentityUser<string>
     /// </summary>
     public bool IsPrivate { get; set; }
 
+    /// <summary>
+    /// Момент последнего онлайна (Phase 18, presence). Обновляется, когда пользователь
+    /// отключает последнее real-time соединение (все хабы). <c>null</c> — ещё ни разу не был онлайн.
+    /// Отдаётся вместе с <c>isOnline</c>; человекочитаемую строку «был(а) в сети» формирует клиент.
+    /// Видимость статуса подчинена взаимной настройке <see cref="PrivacySettings.ShowOnlineStatus"/>.
+    /// </summary>
+    public DateTime? LastSeen { get; set; }
+
     // Навигации
     public UserProfile? UserProfile { get; set; }
     public PrivacySettings? PrivacySettings { get; set; }

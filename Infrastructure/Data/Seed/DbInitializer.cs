@@ -61,6 +61,11 @@ public static class DbInitializer
                 "diana", "Diana Prince", "diana@instaclone.dev", "User123!", Gender.Female,
                 "Приватный аккаунт. Подписки — по запросу.", new[] { UserRole }, isPrivate: true);
 
+            // Presence (Phase 18): «был(а) в сети» для офлайн-пользователей — чтобы get-status
+            // сразу отдавал осмысленный lastSeen. Онлайн определяется по live-соединениям в рантайме.
+            bob.LastSeen = DateTime.UtcNow.AddMinutes(-15);
+            carol.LastSeen = DateTime.UtcNow.AddHours(-26);
+
             await context.SaveChangesAsync();
 
             // 4. Подписки: alice → admin, bob; bob → alice; carol → alice (все одобренные).
