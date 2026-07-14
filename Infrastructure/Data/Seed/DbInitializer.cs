@@ -120,6 +120,11 @@ public static class DbInitializer
 
             await context.SaveChangesAsync();
 
+            // 5b. Explore-контент (Phase 21): посты авторов, на которых alice не подписана (carol/frank),
+            // + взаимодействия alice, формирующие профиль интересов (любимые хэштеги/авторы). Требует
+            // сохранённых базовых хэштегов (переиспользуются) и bobReel — потому после SaveChanges выше.
+            await SeedExploreContentAsync(context, logger, alice, admin, bob, carol, frank);
+
             // 6. Упоминания: alice→@bob в посте (Phase 13); bob→@admin в ответе на коммент (Phase 14).
             context.Mentions.AddRange(
                 new Mention
@@ -382,6 +387,122 @@ public static class DbInitializer
         context.Posts.AddRange(alicePost, bobReel);
         await Task.CompletedTask;
         return (alicePost, adminComment, reply);
+    }
+
+    /// <summary>
+    /// Explore-контент (Phase 21, §12) вокруг демо-субъекта <paramref name="alice"/>. Даёт материал
+    /// для персональной ленты рекомендаций <c>GET /Explore/get-feed</c>:
+    /// <list type="bullet">
+    /// <item>интересы alice: favorite+просмотр bobReel (#travel #roadtrip) и like+просмотр adminSunset
+    /// (#sunset #photography) — на авторов bob/admin она подписана, потому эти посты в Explore не попадут,
+    /// но формируют профиль любимых хэштегов;</item>
+    /// <item>кандидаты открытия: посты carol и frank (alice на них не подписана, блока нет) с теми же
+    /// хэштегами — они и должны всплыть в ленте, ранжированные по совпадению интересов + популярности/свежести;</item>
+    /// <item>близость к автору: carolCity уже просмотрен и сохранён alice (→ вес автора carol,
+    /// буст остальным постам carol), сам исключается из Explore как просмотренный.</item>
+    /// </list>
+    /// Базовые хэштеги <c>sunset</c>/<c>travel</c> переиспользуются (наращиваем <c>PostsCount</c>).
+    /// Метод сохраняет свои изменения сам (нужны Id постов для лайков/просмотров/избранного).
+    /// </summary>
+    private static async Task SeedExploreContentAsync(
+        DataContext context, ILogger logger,
+        User alice, User admin, User bob, User carol, User frank)
+    {
+        var now = DateTime.UtcNow;
+
+        // Базовые хэштеги уже в БД (SeedPostsAsync). Переиспользуем их и наращиваем PostsCount.
+        var sunset = await context.Hashtags.FirstAsync(h => h.Tag == "sunset");
+        var travel = await context.Hashtags.FirstAsync(h => h.Tag == "travel");
+        sunset.PostsCount += 2; // adminSunset, carolSunset
+        travel.PostsCount += 2; // carolTravel, frankTravel
+
+        var photography = new Hashtag { Tag = "photography", PostsCount = 1, CreatedAt = now.AddHours(-8) };
+        var nature = new Hashtag { Tag = "nature", PostsCount = 1, CreatedAt = now.AddHours(-4) };
+        var beach = new Hashtag { Tag = "beach", PostsCount = 1, CreatedAt = now.AddHours(-6) };
+        var mountains = new Hashtag { Tag = "mountains", PostsCount = 1, CreatedAt = now.AddHours(-1) };
+        var city = new Hashtag { Tag = "city", PostsCount = 1, CreatedAt = now.AddHours(-10) };
+
+        // Источник интересов alice #sunset: пост подписки (admin) с её лайком и просмотром. admin
+        // подписан alice → в кандидаты Explore не попадёт, но кормит профиль хэштегов/автора.
+        var adminSunset = new Post
+        {
+            UserId = admin.Id,
+            Title = "Golden hour",
+            Content = "Ещё один закат ✨ #sunset #photography",
+            CreatedAt = now.AddHours(-8),
+            PostHashtags = { new PostHashtag { Hashtag = sunset }, new PostHashtag { Hashtag = photography } },
+            Likes = { new PostLike { UserId = alice.Id, CreatedAt = now.AddMinutes(-80) } },
+            Views = { new PostView { UserId = alice.Id } }
+        };
+
+        // Кандидат: закат carol (#sunset #nature) — совпадает с интересами alice + автор carol.
+        // Самый «популярный» из кандидатов (2 лайка, 3 просмотра).
+        var carolSunset = new Post
+        {
+            UserId = carol.Id,
+            Title = "Sunset by the lake",
+            Content = "Тишина и закат 🌇 #sunset #nature",
+            CreatedAt = now.AddHours(-4),
+            PostHashtags = { new PostHashtag { Hashtag = sunset }, new PostHashtag { Hashtag = nature } },
+            Likes =
+            {
+                new PostLike { UserId = bob.Id, CreatedAt = now.AddHours(-3) },
+                new PostLike { UserId = admin.Id, CreatedAt = now.AddHours(-3) }
+            },
+            Views =
+            {
+                new PostView { UserId = bob.Id },
+                new PostView { UserId = admin.Id },
+                new PostView { UserId = frank.Id }
+            }
+        };
+
+        // Кандидат: путешествие carol (#travel #beach) — совпадает с #travel-интересом alice + автор carol.
+        var carolTravel = new Post
+        {
+            UserId = carol.Id,
+            Title = "Beach day",
+            Content = "Уехали к морю 🏖️ #travel #beach",
+            CreatedAt = now.AddHours(-6),
+            PostHashtags = { new PostHashtag { Hashtag = travel }, new PostHashtag { Hashtag = beach } },
+            Views = { new PostView { UserId = admin.Id } }
+        };
+
+        // Кандидат: пост frank (#travel #mountains) — совпадает с #travel, самый свежий (буст свежести),
+        // другой автор (для проверки разнообразия в выдаче).
+        var frankTravel = new Post
+        {
+            UserId = frank.Id,
+            Title = "Mountain trail",
+            Content = "Горный маршрут ⛰️ #travel #mountains",
+            CreatedAt = now.AddHours(-1),
+            PostHashtags = { new PostHashtag { Hashtag = travel }, new PostHashtag { Hashtag = mountains } },
+            Likes = { new PostLike { UserId = admin.Id, CreatedAt = now.AddMinutes(-30) } },
+            Views = { new PostView { UserId = admin.Id } }
+        };
+
+        // Ещё один пост carol, который alice уже сохранила и посмотрела: даёт близость к автору carol
+        // (→ буст carolSunset/carolTravel), но сам исключается из Explore как просмотренный.
+        var carolCity = new Post
+        {
+            UserId = carol.Id,
+            Title = "City lights",
+            Content = "Вечерний город 🌃 #city",
+            CreatedAt = now.AddHours(-10),
+            PostHashtags = { new PostHashtag { Hashtag = city } },
+            Favorites = { new PostFavorite { UserId = alice.Id, CreatedAt = now.AddMinutes(-70) } },
+            Views = { new PostView { UserId = alice.Id } }
+        };
+
+        context.Posts.AddRange(adminSunset, carolSunset, carolTravel, frankTravel, carolCity);
+
+        // Интересы alice #travel: favorite + просмотр bobReel (уже в БД). bob подписан alice → не кандидат.
+        var bobReel = await context.Posts.FirstAsync(p => p.UserId == bob.Id && p.Title == "Road trip");
+        context.PostFavorites.Add(new PostFavorite { PostId = bobReel.Id, UserId = alice.Id, CreatedAt = now.AddMinutes(-90) });
+        context.PostViews.Add(new PostView { PostId = bobReel.Id, UserId = alice.Id });
+
+        await context.SaveChangesAsync();
+        logger.LogInformation("Seed: Explore-контент (посты carol/frank, интересы alice, популярность) создан");
     }
 
     /// <summary>
