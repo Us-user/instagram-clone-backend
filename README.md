@@ -4,12 +4,15 @@ Production-ready бэкенд Instagram-клона на **C# / ASP.NET Core 8 + 
 Построен строго по контракту API из [`instagram-backend-prompt.md`](./instagram-backend-prompt.md)
 (пути, методы, параметры и DTO воспроизведены дословно).
 
-> Статус: **все фазы фич реализованы** (Account, User, UserProfile, подписки, посты, сторис, чат, локации).
-> Идёт финальный харденинг и документирование. Прогресс и план — в [`ROADMAP.md`](./ROADMAP.md).
+> Статус: **база (Phase 0–10) + новые фичи (Phase 11–21) реализованы** — уведомления, приватность/
+> блокировки, хэштеги/упоминания, ответы+лайки комментов, групповые чаты, реакции/reply/forward/
+> голосовые, close friends/ответы/репост сторис, presence/typing, верификация, 2FA, Explore.
+> Идёт финальный харденинг и документирование (Phase 22). Прогресс и план — в [`ROADMAP.md`](./ROADMAP.md).
 
 ## Стек
 ASP.NET Core 8 Web API · EF Core 8 + Npgsql · ASP.NET Core Identity (`IdentityUser<string>`) ·
-JWT Bearer · AutoMapper · FluentValidation · Swashbuckle (Swagger) · SignalR (чат).
+JWT Bearer · AutoMapper · FluentValidation · Swashbuckle (Swagger) ·
+SignalR (чат, групповые чаты, уведомления, presence/typing).
 
 ## Архитектура (слоистая)
 | Проект | Назначение |
@@ -66,23 +69,37 @@ dotnet ef database update --project Infrastructure --startup-project WebApi
 ## Тестовые аккаунты (Seed)
 При первом запуске создаются роли `Admin`/`User` и тестовые пользователи с профилями:
 
-| Логин | Пароль | Роли |
-|---|---|---|
-| `admin` | `Admin123!` | Admin, User |
-| `alice` | `User123!` | User |
-| `bob`   | `User123!` | User |
-| `carol` | `User123!` | User |
+| Логин | Пароль | Роли | Особенности |
+|---|---|---|---|
+| `admin` | `Admin123!` | Admin, User | верифицирован (`isVerified`) |
+| `alice` | `User123!` | User | верифицирована; демо-субъект Explore |
+| `bob`   | `User123!` | User | в close friends у alice |
+| `carol` | `User123!` | User | заблокирована bob'ом (демо блокировки) |
+| `diana` | `User123!` | User | **приватный** аккаунт; pending-запрос от carol |
+| `frank` | `User123!` | User | включена **2FA** (фикс. TOTP-секрет + 3 известных backup-кода) |
 
-Также сидируются подписки, пара постов (с лайком и комментарием) и справочник локаций.
+Помимо аккаунтов сидируются: подписки (в т.ч. pending-запрос к приватному `diana`),
+посты с лайками/комментариями/ответами/хэштегами, сторис (All + close-friends),
+групповой чат «Команда проекта» с системными и текстовыми сообщениями/реакциями/reply,
+уведомления, упоминания, Explore-контент вокруг `alice` и справочник локаций.
 
 ## Аутентификация и авторизация
 - Аутентификация — **JWT Bearer**. Токен выдаётся `/Account/register` и `/Account/login` в поле `data`.
 - **Все эндпоинты защищены по умолчанию** (fallback-политика `RequireAuthenticatedUser`).
-  Открыты только `register`, `login`, `ForgotPassword`, `ResetPassword` (помечены `[AllowAnonymous]`).
+  Открыты только `register`, `login`, `login-2fa`, `send-2fa-email`, `ForgotPassword`, `ResetPassword`
+  (помечены `[AllowAnonymous]`).
 - **Id текущего пользователя всегда берётся из JWT-claims**, а не из параметров запроса.
 - Владелец ресурса: удалять чужие посты/комменты/сторис/сообщения нельзя (`403 Forbidden`);
-  `delete-user` доступен только роли `Admin`.
+  админ-действия (`/Admin/*`, `delete-user`) — только роль `Admin`; действия в группах — по роли
+  участника (`Admin`/`Member`).
 - Claims в токене: `userId`, `userName`, `email`, `role`.
+- **Двухфакторная аутентификация (2FA):** если у аккаунта включена 2FA, `/Account/login` вместо
+  JWT возвращает `{ requiresTwoFactor, twoFactorToken, methods[] }`; далее клиент вызывает
+  `/Account/login-2fa` с одноразовым кодом (`Totp` / `Email` / `Backup`) и получает JWT.
+  Управление — `enable-2fa` → `confirm-2fa`, `disable-2fa`, `regenerate-backup-codes`.
+- **Приватность и блокировки** (Phase 12) проверяются во всех выдачах контента (ленты, поиск,
+  сторис, хэштеги, чат, presence, explore): заблокированным (в любую сторону) контент/статусы не
+  отдаются, приватный аккаунт виден только одобренным подписчикам.
 
 ## Формат ответа
 Единая обёртка `Response<T>`:
@@ -110,7 +127,13 @@ dotnet ef database update --project Infrastructure --startup-project WebApi
 | Метод | Путь | Параметры |
 |---|---|---|
 | POST | `register` 🔓 | body `RegisterDto` |
-| POST | `login` 🔓 | body `LoginDto` |
+| POST | `login` 🔓 | body `LoginDto` (при 2FA → `TwoFactorRequiredDto`) |
+| POST | `login-2fa` 🔓 | body `Login2FaDto` (twoFactorToken, code, method) |
+| POST | `send-2fa-email` 🔓 | body `Send2FaEmailDto` (twoFactorToken) |
+| POST | `enable-2fa` | — (секрет + QR + backup-коды) |
+| POST | `confirm-2fa` | `?code` (активирует 2FA) |
+| POST | `disable-2fa` | `?code` (TOTP или backup) |
+| POST | `regenerate-backup-codes` | — |
 | DELETE | `ForgotPassword` 🔓 | `?email` |
 | DELETE | `ResetPassword` 🔓 | `?token&email&password&confirmPassword` |
 | PUT | `ChangePassword` | `?oldPassword&password&confirmPassword` |
@@ -143,10 +166,14 @@ dotnet ef database update --project Infrastructure --startup-project WebApi
 ### FollowingRelationShip — `/FollowingRelationShip`
 | Метод | Путь | Параметры |
 |---|---|---|
-| GET | `get-subscribers` | `?userId` |
-| GET | `get-subscriptions` | `?userId` |
-| POST | `add-following-relation-ship` | `?followingUserId` |
+| GET | `get-subscribers` | `?userId` (только одобренные) |
+| GET | `get-subscriptions` | `?userId` (только одобренные) |
+| POST | `add-following-relation-ship` | `?followingUserId` (публичный → сразу, приватный → запрос) |
 | DELETE | `delete-following-relation-ship` | `?followingUserId` |
+| GET | `get-follow-requests` | `?pageNumber&pageSize` (входящие запросы) |
+| POST | `accept-request` | `?requesterUserId` |
+| POST | `decline-request` | `?requesterUserId` |
+| DELETE | `cancel-request` | `?followingUserId` (отменить свой запрос) |
 
 ### Post — `/Post`
 | Метод | Путь | Параметры |
@@ -172,9 +199,11 @@ dotnet ef database update --project Infrastructure --startup-project WebApi
 | GET | `get-my-stories` | — |
 | POST | `LikeStory` | `?storyId` (тумблер) |
 | GET | `GetStoryById` | `?id` |
-| POST | `AddStories` | `?postId` + multipart `AddStoryDto` (Image) |
+| POST | `AddStories` | `?postId` + multipart `AddStoryDto` (Image, **Audience**: All/CloseFriends) |
 | DELETE | `DeleteStory` | `?id` (только автор) |
 | POST | `add-story-view` | `?storyId` (уникально на юзера) |
+| POST | `reply` | `?storyId` + body `{ text }` → личное сообщение автору + уведомление |
+| POST | `share-post` | `?postId` (репост поста в свою сторис) |
 
 ### Chat — `/Chat`
 | Метод | Путь | Параметры |
@@ -195,12 +224,120 @@ dotnet ef database update --project Infrastructure --startup-project WebApi
 | PUT | `update-Location` | body `UpdateLocationDto` (с `locationId`) |
 | DELETE | `delete-Location` | `?id` |
 
-## SignalR — чат в реальном времени
-- Хаб: `/chatHub` (требует JWT).
-- Токен передаётся query-параметром `access_token` (WebSocket не шлёт заголовок `Authorization`):
-  `ws://localhost:<port>/chatHub?access_token=<JWT>`.
-- При `PUT /Chat/send-message` сервер рассылает обоим участникам чата клиентский метод
-  `ReceiveMessage(GetMessageDto)`.
+### Notification — `/Notification`
+| Метод | Путь | Параметры |
+|---|---|---|
+| GET | `get-notifications` | `?pageNumber&pageSize` (группировка за 24ч) |
+| GET | `get-unread-count` | — |
+| PUT | `mark-as-read` | `?id` |
+| PUT | `mark-all-as-read` | — |
+| DELETE | `delete-notification` | `?id` |
+
+### Settings — `/Settings`  (приватность)
+| Метод | Путь | Параметры |
+|---|---|---|
+| GET | `get-privacy` | — |
+| PUT | `update-privacy` | body `UpdatePrivacySettingsDto` (IsPrivate, ShowOnlineStatus, WhoCanMessage/Mention/ReplyStory) |
+
+### Block — `/Block`
+| Метод | Путь | Параметры |
+|---|---|---|
+| POST | `block-user` | `?userId` (взаимная отписка) |
+| DELETE | `unblock-user` | `?userId` |
+| GET | `get-blocked-users` | `?pageNumber&pageSize` |
+
+### Hashtag — `/Hashtag`
+| Метод | Путь | Параметры |
+|---|---|---|
+| GET | `search` | `?query&pageNumber&pageSize` |
+| GET | `get-posts-by-tag` | `?tag&pageNumber&pageSize` (с фильтром блок/приват) |
+| GET | `get-trending` | `?pageNumber&pageSize` (за 7 дней) |
+
+### CloseFriend — `/CloseFriend`
+| Метод | Путь | Параметры |
+|---|---|---|
+| POST | `add` | `?userId` |
+| DELETE | `remove` | `?userId` |
+| GET | `get-list` | `?pageNumber&pageSize` |
+
+### GroupChat — `/GroupChat`  (роли Admin/Member; SignalR `/groupChatHub`)
+| Метод | Путь | Параметры |
+|---|---|---|
+| POST | `create` | body `CreateGroupChatDto` (Name, MemberUserIds) |
+| GET | `get-my-groups` | `?pageNumber&pageSize` |
+| GET | `get-group-by-id` | `?groupId` (помечает прочитанным) |
+| POST | `add-member` | `?groupId&userId` (только Admin группы) |
+| DELETE | `remove-member` | `?groupId&userId` (только Admin группы) |
+| POST | `promote-admin` | `?groupId&userId` (только Admin группы) |
+| POST | `leave` | `?groupId` |
+| PUT | `update-info` | `?groupId` + multipart (Name, Avatar) — только Admin группы |
+| PUT | `send-message` | `?groupId` + multipart (MessageText, File, ReplyToMessageId) |
+| DELETE | `delete-message` | `?messageId` (только отправитель) |
+
+### Message — `/Message`  (реакции/forward/голосовые; личные и групповые)
+| Метод | Путь | Параметры |
+|---|---|---|
+| POST | `react` | `?messageId&context&emoji` (тумблер/замена) |
+| POST | `forward` | `?messageId&context&targetChatId&targetContext` |
+| POST | `send-voice` | multipart `SendVoiceDto` (Context, ChatId, File, Duration, ReplyToMessageId) |
+
+`context` — `Direct` (личный `Message`) или `Group` (`GroupMessage`).
+`Chat/send-message` расширен необязательным `ReplyToMessageId`; реакции и цитата reply отдаются в DTO сообщений.
+
+### Presence — `/Presence`  (онлайн-статусы; SignalR `/presenceHub`)
+| Метод | Путь | Параметры |
+|---|---|---|
+| GET | `get-status` | `?userId` (`isOnline` + `lastSeen`) |
+| POST | `get-statuses` | body `PresenceQueryDto` (`{ userIds }`) |
+
+Presence взаимна: если у запрашивающего выключен `ShowOnlineStatus`, он не видит чужие статусы, а его — скрыт для всех.
+
+### Admin — `/Admin`  🛡 (только роль Admin)
+| Метод | Путь | Параметры |
+|---|---|---|
+| POST | `verify-user` | `?userId` (ставит `isVerified`) |
+| DELETE | `unverify-user` | `?userId` |
+| POST | `grant-admin` | `?userId` |
+| DELETE | `revoke-admin` | `?userId` (защита от самолокаута) |
+
+### Explore — `/Explore`  (рекомендации, content-based)
+| Метод | Путь | Параметры |
+|---|---|---|
+| GET | `get-feed` | `?pageNumber&pageSize` (персональная лента по интересам) |
+| GET | `get-popular` | `?pageNumber&pageSize` (cold start — популярное) |
+
+## SignalR — реальное время
+Все хабы требуют JWT. WebSocket не шлёт заголовок `Authorization`, поэтому токен передаётся
+query-параметром `access_token`, например `ws://localhost:<port>/chatHub?access_token=<JWT>`.
+
+| Хаб | Назначение | Ключевые события (сервер → клиент) |
+|---|---|---|
+| `/chatHub` | Личные чаты, typing | `ReceiveMessage`, `ReceiveReaction`, `UserTyping` |
+| `/groupChatHub` | Групповые чаты, typing | `ReceiveMessage`, `ReceiveReaction`, `GroupTyping` |
+| `/notificationHub` | Уведомления (live «звоночек») | `ReceiveNotification` |
+| `/presenceHub` | Онлайн-статусы | `ReceivePresence` |
+
+- Личный `PUT /Chat/send-message` / голосовое → `ReceiveMessage(GetMessageDto)` обоим участникам.
+- Групповое сообщение (обычное и системное) → `ReceiveMessage` всем участникам группы.
+- Реакция (`POST /Message/react`) → `ReceiveReaction` в соответствующий хаб.
+- Typing: клиент вызывает `ChatHub.Typing(chatId, kind)` / `GroupChatHub.Typing(groupChatId, kind)`
+  (`kind ∈ {text, voice}`) — эфемерно, в БД не пишется.
+- Presence-изменения рассылаются адресно собеседникам по личным чатам и участникам общих групп.
+
+## Новые фичи (Phase 11–21) — кратко
+- **Уведомления** (§2): типы Like/Follow/Comment/Mention/CommentReply/CommentLike/FollowRequest/
+  FollowRequestAccepted/StoryReply/PostShared; группировка за 24ч; live через `/notificationHub`.
+- **Приватность и блокировки** (§6): приватные аккаунты + follow requests, блокировка (взаимная
+  отписка), настройки `WhoCanMessage/Mention/ReplyStory`; сквозная фильтрация выдач через `AccessGuard`.
+- **Хэштеги и упоминания** (§3–4): парсинг `#tag`/`@username`, тренды, `MentionedUsers` в DTO.
+- **Комментарии** (§5): ответы (2 уровня) + лайки комментов.
+- **Групповые чаты** (§7): роли Admin/Member, системные сообщения, непрочитанные на участника.
+- **Сообщения** (§8): реакции (полиморфные), reply-цитата, forward (копия), голосовые (`wwwroot/voice`).
+- **Сторис** (§9): close friends, ответы в директ, репост поста.
+- **Presence/typing** (§1): онлайн по живым SignalR-соединениям, взаимная приватность статуса.
+- **Верификация** (§10): `isVerified` во всех author-DTO, админ-эндпоинты.
+- **2FA** (§11): TOTP (RFC 6238) + email-код + backup-коды.
+- **Explore** (§12): content-based рекомендации без ML (профиль интересов на лету).
 
 ## Рабочий процесс
 Проект ведётся сессиями: `/start` продолжает работу по роадмапу, `/stop` фиксирует изменения.

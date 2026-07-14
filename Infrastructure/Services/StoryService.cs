@@ -51,9 +51,11 @@ public class StoryService : IStoryService
         var currentId = _currentUser.GetRequiredUserId();
         var since = ActiveSince;
 
-        // Источник сторис ленты — авторы, на кого подписан текущий юзер.
+        // Источник сторис ленты — авторы, на кого текущий юзер подписан ОДОБРЕННО.
+        // Харденинг (§13): pending-запрос к приватному аккаунту не даёт доступ к его сторис
+        // до принятия (блокировка снимает подписку в обе стороны — блок здесь уже исключён).
         var followingIds = _context.FollowingRelationShips.AsNoTracking()
-            .Where(f => f.UserId == currentId)
+            .Where(f => f.UserId == currentId && f.Status == FollowStatus.Accepted)
             .Select(f => f.FollowingUserId);
 
         // Группировка по авторам выражена сортировкой: сначала по автору, внутри — свежие выше.
@@ -76,6 +78,11 @@ public class StoryService : IStoryService
 
         if (string.IsNullOrWhiteSpace(userId))
             throw new BadRequestException("Некорректный Id пользователя.");
+
+        // Харденинг (§13): блокировка в любую сторону или приватный аккаунт без одобренной
+        // подписки — сторис автора не отдаём (пустая лента, как в остальных выдачах контента).
+        if (!await AccessGuard.CanViewContentAsync(_context, userId, currentId))
+            return new Response<List<GetStoryDto>>(new List<GetStoryDto>());
 
         var since = ActiveSince;
         // §9: свои close-friends-сторис видны себе всегда; чужие — только если ты в близких у автора.
@@ -144,6 +151,11 @@ public class StoryService : IStoryService
             .Select(StoryProjections.ToDto())
             .FirstOrDefaultAsync()
             ?? throw new NotFoundException("Сторис не найдена.");
+
+        // Харденинг (§13): блокировка в любую сторону или приватный аккаунт без одобренной
+        // подписки — сторис не показываем (404, чтобы не раскрывать факт существования).
+        if (!await AccessGuard.CanViewContentAsync(_context, story.UserId, currentId))
+            throw new NotFoundException("Сторис не найдена.");
 
         // §9: close-friends-сторис доступна только автору и тем, кто у него в близких.
         if (story.Audience == StoryAudience.CloseFriends

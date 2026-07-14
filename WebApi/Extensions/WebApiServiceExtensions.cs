@@ -44,7 +44,7 @@ public static class WebApiServiceExtensions
                 };
 
                 // SignalR: WebSocket-подключение не может слать заголовок Authorization,
-                // поэтому токен для хаба чата принимаем из query-параметра access_token.
+                // поэтому токен для любого хаба принимаем из query-параметра access_token.
                 options.Events = new JwtBearerEvents
                 {
                     OnMessageReceived = context =>
@@ -52,7 +52,9 @@ public static class WebApiServiceExtensions
                         var accessToken = context.Request.Query["access_token"];
                         var path = context.HttpContext.Request.Path;
                         var isHubPath = path.StartsWithSegments("/chatHub")
-                                        || path.StartsWithSegments("/notificationHub");
+                                        || path.StartsWithSegments("/notificationHub")
+                                        || path.StartsWithSegments("/groupChatHub")
+                                        || path.StartsWithSegments("/presenceHub");
                         if (!string.IsNullOrEmpty(accessToken) && isHubPath)
                             context.Token = accessToken;
                         return Task.CompletedTask;
