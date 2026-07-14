@@ -5,10 +5,10 @@ using Microsoft.AspNetCore.Http;
 
 namespace Infrastructure.Services;
 
-/// <summary>Хранит файлы в <c>{WebRootPath}/images</c> под уникальными Guid-именами.</summary>
+/// <summary>Хранит файлы в <c>{WebRootPath}/{folder}</c> (по умолчанию <c>images</c>) под уникальными Guid-именами.</summary>
 public class FileService : IFileService
 {
-    private const string ImagesFolder = "images";
+    private const string DefaultFolder = "images";
     private const long DefaultMaxSizeBytes = 10 * 1024 * 1024; // 10 МБ
 
     private static readonly string[] DefaultImageExtensions =
@@ -22,6 +22,7 @@ public class FileService : IFileService
         IFormFile file,
         string[]? allowedExtensions = null,
         long? maxSizeBytes = null,
+        string? folder = null,
         CancellationToken cancellationToken = default)
     {
         if (file is null || file.Length == 0)
@@ -37,7 +38,7 @@ public class FileService : IFileService
             throw new BadRequestException(
                 $"Недопустимое расширение файла. Разрешены: {string.Join(", ", extensions)}.");
 
-        var folderPath = GetImagesFolderPath();
+        var folderPath = GetFolderPath(folder);
         Directory.CreateDirectory(folderPath);
 
         var fileName = $"{Guid.NewGuid():N}{extension}";
@@ -49,21 +50,38 @@ public class FileService : IFileService
         return fileName;
     }
 
-    public void DeleteFile(string? fileName)
+    public void DeleteFile(string? fileName, string? folder = null)
     {
         if (string.IsNullOrWhiteSpace(fileName))
             return;
 
-        var fullPath = Path.Combine(GetImagesFolderPath(), fileName);
+        var fullPath = Path.Combine(GetFolderPath(folder), fileName);
         if (File.Exists(fullPath))
             File.Delete(fullPath);
     }
 
-    private string GetImagesFolderPath()
+    public string? CopyFile(string? fileName, string? folder = null)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            return null;
+
+        var folderPath = GetFolderPath(folder);
+        var source = Path.Combine(folderPath, fileName);
+        if (!File.Exists(source))
+            return null;
+
+        var extension = Path.GetExtension(fileName);
+        var newName = $"{Guid.NewGuid():N}{extension}";
+        File.Copy(source, Path.Combine(folderPath, newName));
+
+        return newName;
+    }
+
+    private string GetFolderPath(string? folder)
     {
         // В dev WebRootPath может быть null, если wwwroot ещё не создан — берём ContentRoot/wwwroot.
         var webRoot = _environment.WebRootPath
                       ?? Path.Combine(_environment.ContentRootPath, "wwwroot");
-        return Path.Combine(webRoot, ImagesFolder);
+        return Path.Combine(webRoot, string.IsNullOrWhiteSpace(folder) ? DefaultFolder : folder);
     }
 }

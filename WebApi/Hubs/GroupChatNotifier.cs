@@ -1,4 +1,5 @@
 using Domain.DTOs.GroupChat;
+using Domain.DTOs.Message;
 using Infrastructure.Services.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 
@@ -16,4 +17,7 @@ public class GroupChatNotifier : IGroupChatNotifier
 
     public Task NotifyGroupMessageAsync(IReadOnlyCollection<string> memberUserIds, GetGroupMessageDto message) =>
         _hub.Clients.Users(memberUserIds.ToList()).ReceiveGroupMessage(message);
+
+    public Task NotifyReactionAsync(IReadOnlyCollection<string> memberUserIds, MessageReactionsDto reactions) =>
+        _hub.Clients.Users(memberUserIds.ToList()).ReceiveReaction(reactions);
 }

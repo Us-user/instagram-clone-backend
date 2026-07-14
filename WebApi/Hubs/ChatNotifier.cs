@@ -1,4 +1,5 @@
 using Domain.DTOs.Chat;
+using Domain.DTOs.Message;
 using Infrastructure.Services.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 
@@ -16,4 +17,7 @@ public class ChatNotifier : IChatNotifier
 
     public Task NotifyMessageAsync(string user1Id, string user2Id, GetMessageDto message) =>
         _hub.Clients.Users(new[] { user1Id, user2Id }).ReceiveMessage(message);
+
+    public Task NotifyReactionAsync(string user1Id, string user2Id, MessageReactionsDto reactions) =>
+        _hub.Clients.Users(new[] { user1Id, user2Id }).ReceiveReaction(reactions);
 }

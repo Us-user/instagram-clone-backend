@@ -50,6 +50,8 @@ public class DataContext : IdentityDbContext<User, IdentityRole, string>
     public DbSet<GroupChatMember> GroupChatMembers => Set<GroupChatMember>();
     public DbSet<GroupMessage> GroupMessages => Set<GroupMessage>();
 
+    public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

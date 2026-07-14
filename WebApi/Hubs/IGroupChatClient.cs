@@ -1,4 +1,5 @@
 using Domain.DTOs.GroupChat;
+using Domain.DTOs.Message;
 
 namespace WebApi.Hubs;
 
@@ -7,4 +8,7 @@ public interface IGroupChatClient
 {
     /// <summary>Доставка нового (в т.ч. служебного) сообщения группы подключённому участнику.</summary>
     Task ReceiveGroupMessage(GetGroupMessageDto message);
+
+    /// <summary>Доставка обновлённого набора реакций сообщения группы (§8).</summary>
+    Task ReceiveReaction(MessageReactionsDto reactions);
 }

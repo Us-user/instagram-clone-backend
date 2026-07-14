@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using Domain.DTOs.Chat;
+using Domain.DTOs.Message;
 using Domain.Entities;
 
 namespace Infrastructure.Common;
@@ -33,7 +34,11 @@ public static class ChatProjections
             UnreadCount = c.Messages.Count(m => m.SenderUserId != currentUserId && !m.IsRead)
         };
 
-    /// <summary>Проекция <see cref="Message"/> → <see cref="GetMessageDto"/>.</summary>
+    /// <summary>
+    /// Проекция <see cref="Message"/> → <see cref="GetMessageDto"/> (включая поля §8: тип/голос/
+    /// reply/forward). Реакции навигацией не тянутся (полиморфны) — догружаются
+    /// <see cref="ReactionEnrichment"/> после материализации.
+    /// </summary>
     public static Expression<Func<Message, GetMessageDto>> MessageToDto =>
         m => new GetMessageDto
         {
@@ -43,6 +48,19 @@ public static class ChatProjections
             MessageText = m.MessageText,
             FileName = m.FileName,
             CreatedAt = m.CreatedAt,
-            IsRead = m.IsRead
+            IsRead = m.IsRead,
+            MessageType = m.MessageType,
+            Duration = m.Duration,
+            Waveform = m.Waveform,
+            ReplyToMessageId = m.ReplyToMessageId,
+            ReplyTo = m.ReplyToMessage == null ? null : new MessageReplyDto
+            {
+                Id = m.ReplyToMessage.Id,
+                SenderUserId = m.ReplyToMessage.SenderUserId,
+                SenderUserName = m.ReplyToMessage.Sender != null ? m.ReplyToMessage.Sender.UserName : null,
+                MessageText = m.ReplyToMessage.MessageText,
+                MessageType = m.ReplyToMessage.MessageType
+            },
+            IsForwarded = m.IsForwarded
         };
 }

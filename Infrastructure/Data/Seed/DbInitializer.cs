@@ -112,10 +112,43 @@ public static class DbInitializer
             SeedNotifications(context, alicePost, adminComment, reply, alice, bob, admin, carol, diana);
 
             // 8. Пример группового чата (Phase 15): admin (Admin) + alice, bob (Member).
-            SeedGroupChat(context, admin, alice, bob);
+            var groupAliceHi = SeedGroupChat(context, admin, alice, bob);
+
+            // 8b. Пример личного чата (Phase 16): alice ↔ bob с ответом (reply).
+            var directAliceMsg = SeedDirectChat(context, alice, bob);
 
             await context.SaveChangesAsync();
-            logger.LogInformation("Seed: тестовые пользователи, подписки, посты, хэштеги, упоминания, уведомления и группа созданы");
+
+            // 8c. Реакции (§8, после SaveChanges — нужны Id сообщений): в группе admin ❤️ и bob 🔥
+            // на сообщение alice; в личке bob 😂 на сообщение alice. Правило «не себе» соблюдено.
+            context.MessageReactions.AddRange(
+                new MessageReaction
+                {
+                    MessageId = groupAliceHi.Id,
+                    MessageContext = MessageContext.Group,
+                    UserId = admin.Id,
+                    Emoji = "❤️",
+                    CreatedAt = DateTime.UtcNow.AddMinutes(-25)
+                },
+                new MessageReaction
+                {
+                    MessageId = groupAliceHi.Id,
+                    MessageContext = MessageContext.Group,
+                    UserId = bob.Id,
+                    Emoji = "🔥",
+                    CreatedAt = DateTime.UtcNow.AddMinutes(-24)
+                },
+                new MessageReaction
+                {
+                    MessageId = directAliceMsg.Id,
+                    MessageContext = MessageContext.Direct,
+                    UserId = bob.Id,
+                    Emoji = "😂",
+                    CreatedAt = DateTime.UtcNow.AddMinutes(-38)
+                });
+
+            await context.SaveChangesAsync();
+            logger.LogInformation("Seed: тестовые пользователи, подписки, посты, хэштеги, упоминания, уведомления, группа, личный чат и реакции созданы");
         }
 
         // 7. Справочник локаций.
@@ -262,8 +295,9 @@ public static class DbInitializer
     /// Пример группового чата (Phase 15): создатель <paramref name="admin"/> — Admin, alice и bob —
     /// Member. Лента начинается со служебных сообщений (создал/добавил), затем пара текстовых и
     /// ответ (reply). Весь граф добавляется в контекст; Id проставляются на общем SaveChanges.
+    /// Возвращает сообщение alice «Привет всем!» — на него в Phase 16 вешаются тестовые реакции.
     /// </summary>
-    private static void SeedGroupChat(DataContext context, User admin, User alice, User bob)
+    private static GroupMessage SeedGroupChat(DataContext context, User admin, User alice, User bob)
     {
         var createdAt = DateTime.UtcNow.AddHours(-2);
 
@@ -298,6 +332,49 @@ public static class DbInitializer
         };
 
         context.GroupChats.Add(group);
+        return aliceHi;
+    }
+
+    /// <summary>
+    /// Пример личного чата (Phase 16): alice ↔ bob с ответом (reply) bob на первое сообщение alice.
+    /// Возвращает сообщение alice — на него вешается тестовая реакция (Direct). Id проставляются на
+    /// общем SaveChanges.
+    /// </summary>
+    private static Message SeedDirectChat(DataContext context, User alice, User bob)
+    {
+        var createdAt = DateTime.UtcNow.AddMinutes(-40);
+
+        var aliceMsg = new Message
+        {
+            SenderUserId = alice.Id,
+            MessageText = "Привет, Боб! Как продвигается проект?",
+            MessageType = MessageType.Text,
+            IsRead = true,
+            CreatedAt = createdAt
+        };
+
+        var chat = new Chat
+        {
+            User1Id = alice.Id,
+            User2Id = bob.Id,
+            CreatedAt = createdAt,
+            Messages =
+            {
+                aliceMsg,
+                new Message
+                {
+                    SenderUserId = bob.Id,
+                    MessageText = "Привет! Всё по плану 🙂",
+                    MessageType = MessageType.Text,
+                    ReplyToMessage = aliceMsg,
+                    IsRead = false,
+                    CreatedAt = createdAt.AddMinutes(2)
+                }
+            }
+        };
+
+        context.Chats.Add(chat);
+        return aliceMsg;
     }
 
     /// <summary>

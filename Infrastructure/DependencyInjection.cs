@@ -62,6 +62,7 @@ public static class DependencyInjection
         services.AddScoped<IPostService, PostService>();
         services.AddScoped<IStoryService, StoryService>();
         services.AddScoped<IChatService, ChatService>();
+        services.AddScoped<IMessageService, MessageService>();
         services.AddScoped<ILocationService, LocationService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IBlockService, BlockService>();

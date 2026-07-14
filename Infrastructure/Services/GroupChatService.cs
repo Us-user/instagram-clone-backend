@@ -443,12 +443,18 @@ public class GroupChatService : IGroupChatService
         }
 
         var fileName = message.FileName;
+        var messageType = message.MessageType;
+
+        // Реакции полиморфны (без FK на сообщение) — чистим вручную.
+        await _context.MessageReactions
+            .Where(r => r.MessageContext == MessageContext.Group && r.MessageId == message.Id)
+            .ExecuteDeleteAsync();
 
         _context.GroupMessages.Remove(message);
         await _context.SaveChangesAsync();
 
         if (!string.IsNullOrWhiteSpace(fileName))
-            _fileService.DeleteFile(fileName);
+            _fileService.DeleteFile(fileName, messageType == MessageType.Voice ? "voice" : "images");
 
         return new Response<bool>(true);
     }
@@ -526,6 +532,12 @@ public class GroupChatService : IGroupChatService
             .ThenBy(m => m.Id)
             .Select(GroupChatProjections.MessageToDto)
             .ToListAsync();
+
+        // Реакции догружаем отдельно (полиморфны, без навигации) и раскладываем по сообщениям.
+        var reactions = await ReactionEnrichment.LoadAsync(
+            _context, MessageContext.Group, messages.Select(m => m.Id).ToList());
+        foreach (var m in messages)
+            m.Reactions = reactions.GetValueOrDefault(m.Id) ?? new();
 
         return new GetGroupChatByIdDto
         {

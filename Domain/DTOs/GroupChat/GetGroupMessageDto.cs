@@ -1,3 +1,4 @@
+using Domain.DTOs.Message;
 using Domain.Enums;
 
 namespace Domain.DTOs.GroupChat;
@@ -26,4 +27,7 @@ public class GetGroupMessageDto
 
     public bool IsForwarded { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>Реакции на сообщение (кто и каким эмодзи отреагировал) — §8.</summary>
+    public List<MessageReactionDto> Reactions { get; set; } = new();
 }

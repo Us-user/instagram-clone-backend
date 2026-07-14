@@ -1,5 +1,6 @@
 using Domain.DTOs.Chat;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Exceptions;
 using Domain.Responses;
 using Infrastructure.Common;
@@ -84,6 +85,12 @@ public class ChatService : IChatService
             .Select(ChatProjections.MessageToDto)
             .ToListAsync();
 
+        // Реакции догружаем отдельно (полиморфны, без навигации) и раскладываем по сообщениям.
+        var reactions = await ReactionEnrichment.LoadAsync(
+            _context, MessageContext.Direct, messages.Select(m => m.Id).ToList());
+        foreach (var m in messages)
+            m.Reactions = reactions.GetValueOrDefault(m.Id) ?? new();
+
         var dto = new GetChatByIdDto
         {
             Id = chat.Id,
@@ -158,9 +165,18 @@ public class ChatService : IChatService
         if (await AccessGuard.IsBlockBetweenAsync(_context, currentId, interlocutorId))
             throw new ForbiddenException("Отправка сообщения недоступна из-за блокировки.");
 
+        // Reply (§8) допустим только на сообщение этого же чата.
+        if (dto.ReplyToMessageId is > 0 &&
+            !await _context.Messages.AnyAsync(m => m.Id == dto.ReplyToMessageId && m.ChatId == chat.Id))
+            throw new BadRequestException("Сообщение для ответа не найдено в этом чате.");
+
         string? fileName = null;
+        var messageType = MessageType.Text;
         if (dto.File is not null)
+        {
             fileName = await _fileService.SaveFileAsync(dto.File);
+            messageType = MessageType.Image; // личные вложения — только изображения (см. FileService)
+        }
 
         var message = new Message
         {
@@ -168,6 +184,8 @@ public class ChatService : IChatService
             SenderUserId = currentId,
             MessageText = string.IsNullOrWhiteSpace(dto.MessageText) ? null : dto.MessageText,
             FileName = fileName,
+            MessageType = messageType,
+            ReplyToMessageId = dto.ReplyToMessageId is > 0 ? dto.ReplyToMessageId : null,
             CreatedAt = DateTime.UtcNow,
             IsRead = false
         };
@@ -201,12 +219,18 @@ public class ChatService : IChatService
             throw new ForbiddenException("Нельзя удалить чужое сообщение.");
 
         var fileName = message.FileName;
+        var messageType = message.MessageType;
+
+        // Реакции полиморфны (без FK на сообщение) — чистим вручную.
+        await _context.MessageReactions
+            .Where(r => r.MessageContext == MessageContext.Direct && r.MessageId == message.Id)
+            .ExecuteDeleteAsync();
 
         _context.Messages.Remove(message);
         await _context.SaveChangesAsync();
 
         if (!string.IsNullOrWhiteSpace(fileName))
-            _fileService.DeleteFile(fileName);
+            _fileService.DeleteFile(fileName, messageType == MessageType.Voice ? "voice" : "images");
 
         return new Response<bool>(true);
     }
@@ -226,17 +250,24 @@ public class ChatService : IChatService
         if (chat.User1Id != currentId && chat.User2Id != currentId)
             throw new ForbiddenException("Нет доступа к этому чату.");
 
-        // Имена файлов вложений собираем до удаления; сам чат каскадом чистит сообщения.
-        var fileNames = chat.Messages
+        // Имена файлов вложений (с папкой по типу) собираем до удаления; сам чат каскадом чистит сообщения.
+        var files = chat.Messages
             .Where(m => !string.IsNullOrWhiteSpace(m.FileName))
-            .Select(m => m.FileName!)
+            .Select(m => new { m.FileName, m.MessageType })
             .ToList();
+
+        // Реакции сообщений этого чата (полиморфны, без FK) — чистим вручную.
+        var messageIds = chat.Messages.Select(m => m.Id).ToList();
+        if (messageIds.Count > 0)
+            await _context.MessageReactions
+                .Where(r => r.MessageContext == MessageContext.Direct && messageIds.Contains(r.MessageId))
+                .ExecuteDeleteAsync();
 
         _context.Chats.Remove(chat);
         await _context.SaveChangesAsync();
 
-        foreach (var fileName in fileNames)
-            _fileService.DeleteFile(fileName);
+        foreach (var file in files)
+            _fileService.DeleteFile(file.FileName, file.MessageType == MessageType.Voice ? "voice" : "images");
 
         return new Response<bool>(true);
     }

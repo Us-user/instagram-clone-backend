@@ -1,4 +1,5 @@
 using Domain.DTOs.GroupChat;
+using Domain.DTOs.Message;
 
 namespace Infrastructure.Services.Interfaces;
 
@@ -11,4 +12,7 @@ public interface IGroupChatNotifier
 {
     /// <summary>Доставить новое сообщение группы всем перечисленным участникам в реальном времени.</summary>
     Task NotifyGroupMessageAsync(IReadOnlyCollection<string> memberUserIds, GetGroupMessageDto message);
+
+    /// <summary>Доставить обновлённый набор реакций сообщения всем участникам группы (§8).</summary>
+    Task NotifyReactionAsync(IReadOnlyCollection<string> memberUserIds, MessageReactionsDto reactions);
 }

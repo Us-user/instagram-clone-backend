@@ -8,4 +8,7 @@ public class SendMessageDto
     public int ChatId { get; set; }
     public string? MessageText { get; set; }
     public IFormFile? File { get; set; }
+
+    /// <summary>Необязательный ответ на сообщение того же чата (reply, §8).</summary>
+    public int? ReplyToMessageId { get; set; }
 }

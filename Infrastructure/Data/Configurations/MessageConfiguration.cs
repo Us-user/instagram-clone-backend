@@ -13,6 +13,7 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
 
         builder.Property(m => m.MessageText).HasMaxLength(4000);
         builder.Property(m => m.FileName).HasMaxLength(512);
+        builder.Property(m => m.Waveform).HasMaxLength(4000);
 
         builder.HasOne(m => m.Chat)
             .WithMany(c => c.Messages)
@@ -23,6 +24,13 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
             .WithMany()
             .HasForeignKey(m => m.SenderUserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Самоссылка reply (§8) — на SetNull: удаление процитированного не уносит ответы,
+        // лишь обнуляет ссылку на цитату (как у групповых сообщений).
+        builder.HasOne(m => m.ReplyToMessage)
+            .WithMany()
+            .HasForeignKey(m => m.ReplyToMessageId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Выборка сообщений чата в хронологическом порядке.
         builder.HasIndex(m => new { m.ChatId, m.CreatedAt });
