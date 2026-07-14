@@ -48,40 +48,6 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// ── Авто-применение миграций и Seed при старте ────────────────────────────────
-// Если БД недоступна — логируем и продолжаем, чтобы приложение (и Swagger) поднялось.
-using (var scope = app.Services.CreateScope())
-{
-    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
-
-    // На первом деплое (Render Blueprint и т.п.) веб-сервис может стартовать раньше, чем БД
-    // допровизионится/примет подключения. Ретраим применение миграций/Seed с бэкоффом, иначе
-    // приложение осталось бы без схемы и все запросы к БД возвращали бы 500.
-    const int maxAttempts = 10;
-    var delay = TimeSpan.FromSeconds(3);
-    for (var attempt = 1; attempt <= maxAttempts; attempt++)
-    {
-        try
-        {
-            await DbInitializer.InitializeAsync(scope.ServiceProvider);
-            logger.LogInformation("Миграции/Seed применены (попытка {Attempt}).", attempt);
-            break;
-        }
-        catch (Exception ex) when (attempt < maxAttempts)
-        {
-            logger.LogWarning(ex,
-                "БД недоступна (попытка {Attempt}/{Max}), повтор через {Delay}с…",
-                attempt, maxAttempts, delay.TotalSeconds);
-            await Task.Delay(delay);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex,
-                "Не удалось применить миграции/Seed после {Max} попыток — БД недоступна?", maxAttempts);
-        }
-    }
-}
-
 // ── Конвейер обработки запросов ───────────────────────────────────────────────
 // Глобальная обработка исключений — первым, чтобы ловить ошибки всего конвейера.
 app.UseMiddleware<ExceptionHandlingMiddleware>();
@@ -131,4 +97,44 @@ app.MapHub<NotificationHub>("/notificationHub");
 app.MapHub<GroupChatHub>("/groupChatHub");
 app.MapHub<PresenceHub>("/presenceHub");
 
-app.Run();
+// ── Старт: сначала биндим порт, потом миграции ────────────────────────────────
+// КРИТИЧНО для PaaS (Render): порт нужно забиндить и поднять /health раньше, чем гонять
+// миграции. Иначе при недоступной/медленной БД (напр. free-Postgres на Render истёк и
+// suspended) старт зависает в ретраях до бинда → Render не дожидается health-check и
+// убивает контейнер → рестарт → снова ретраи → сервис НИКОГДА не биндит порт и весь API
+// недоступен (edge сбрасывает соединение на ~60с). Стартуем хост первым; миграции/Seed
+// идут следом и их сбой уже не мешает /health и /health/db отдавать ответ.
+await app.StartAsync();
+
+using (var scope = app.Services.CreateScope())
+{
+    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+
+    // На первом деплое (Render Blueprint и т.п.) веб-сервис может стартовать раньше, чем БД
+    // допровизионится/примет подключения. Ретраим применение миграций/Seed с бэкоффом.
+    const int maxAttempts = 10;
+    var delay = TimeSpan.FromSeconds(3);
+    for (var attempt = 1; attempt <= maxAttempts; attempt++)
+    {
+        try
+        {
+            await DbInitializer.InitializeAsync(scope.ServiceProvider);
+            logger.LogInformation("Миграции/Seed применены (попытка {Attempt}).", attempt);
+            break;
+        }
+        catch (Exception ex) when (attempt < maxAttempts)
+        {
+            logger.LogWarning(ex,
+                "БД недоступна (попытка {Attempt}/{Max}), повтор через {Delay}с…",
+                attempt, maxAttempts, delay.TotalSeconds);
+            await Task.Delay(delay);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Не удалось применить миграции/Seed после {Max} попыток — БД недоступна?", maxAttempts);
+        }
+    }
+}
+
+await app.WaitForShutdownAsync();
