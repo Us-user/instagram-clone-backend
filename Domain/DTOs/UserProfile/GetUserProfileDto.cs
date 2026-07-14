@@ -23,6 +23,9 @@ public class GetUserProfileDto
     /// <summary>Приватный ли аккаунт (Phase 12). Для приватного чужого профиля контент скрыт.</summary>
     public bool IsPrivate { get; set; }
 
+    /// <summary>Верифицирован ли пользователь («синяя галочка», §10).</summary>
+    public bool IsVerified { get; set; }
+
     /// <summary>
     /// Отправлен ли текущим пользователем запрос на подписку, ожидающий одобрения
     /// (кнопка «Запрос отправлен» для приватного профиля).

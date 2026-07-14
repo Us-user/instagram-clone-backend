@@ -8,4 +8,7 @@ public class GetUserDto
     public string Email { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? Avatar { get; set; }
+
+    /// <summary>Верифицирован ли пользователь («синяя галочка», §10).</summary>
+    public bool IsVerified { get; set; }
 }

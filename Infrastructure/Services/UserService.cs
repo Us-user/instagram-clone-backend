@@ -69,7 +69,8 @@ public class UserService : IUserService
                 UserName = u.UserName!,
                 Email = u.Email!,
                 FullName = u.FullName,
-                Avatar = u.Avatar
+                Avatar = u.Avatar,
+                IsVerified = u.IsVerified
             })
             .ToListAsync();
 

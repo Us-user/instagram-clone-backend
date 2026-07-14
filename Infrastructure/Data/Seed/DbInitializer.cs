@@ -66,6 +66,12 @@ public static class DbInitializer
             bob.LastSeen = DateTime.UtcNow.AddMinutes(-15);
             carol.LastSeen = DateTime.UtcNow.AddHours(-26);
 
+            // Верификация (Phase 19): «синяя галочка» — у платформенного admin и у alice
+            // (публичный автор), чтобы isVerified в DTO сразу был проверяем. Управляется
+            // через /Admin/verify-user и /Admin/unverify-user (только роль Admin).
+            admin.IsVerified = true;
+            alice.IsVerified = true;
+
             await context.SaveChangesAsync();
 
             // 4. Подписки: alice → admin, bob; bob → alice; carol → alice (все одобренные).

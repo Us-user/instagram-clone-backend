@@ -24,6 +24,7 @@ public static class PostProjections
             UserId = p.UserId,
             UserName = p.User!.UserName!,
             UserImage = p.User.Avatar,
+            IsVerified = p.User.IsVerified,
             Images = p.Images.Select(i => i.ImageName).ToList(),
             LikeCount = p.Likes.Count,
             CommentCount = p.Comments.Count,

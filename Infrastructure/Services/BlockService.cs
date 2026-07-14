@@ -102,7 +102,8 @@ public class BlockService : IBlockService
                 UserName = b.BlockedUser.UserName!,
                 Email = b.BlockedUser.Email!,
                 FullName = b.BlockedUser.FullName,
-                Avatar = b.BlockedUser.Avatar
+                Avatar = b.BlockedUser.Avatar,
+                IsVerified = b.BlockedUser.IsVerified
             })
             .ToListAsync();
 

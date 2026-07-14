@@ -24,6 +24,7 @@ public static class CommentProjections
             UserId = c.UserId,
             UserName = c.User!.UserName!,
             UserImage = c.User.Avatar,
+            IsVerified = c.User.IsVerified,
             ParentCommentId = c.ParentCommentId,
             RepliesCount = c.Replies.Count,
             LikesCount = c.CommentLikes.Count,

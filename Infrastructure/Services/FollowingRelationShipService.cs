@@ -51,7 +51,8 @@ public class FollowingRelationShipService : IFollowingRelationShipService
                 UserName = f.User.UserName!,
                 Email = f.User.Email!,
                 FullName = f.User.FullName,
-                Avatar = f.User.Avatar
+                Avatar = f.User.Avatar,
+                IsVerified = f.User.IsVerified
             })
             .ToListAsync();
 
@@ -76,7 +77,8 @@ public class FollowingRelationShipService : IFollowingRelationShipService
                 UserName = f.FollowingUser.UserName!,
                 Email = f.FollowingUser.Email!,
                 FullName = f.FollowingUser.FullName,
-                Avatar = f.FollowingUser.Avatar
+                Avatar = f.FollowingUser.Avatar,
+                IsVerified = f.FollowingUser.IsVerified
             })
             .ToListAsync();
 

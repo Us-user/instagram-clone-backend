@@ -176,6 +176,7 @@ public class UserProfileService : IUserProfileService
             Gender = profile.Gender,
             Image = profile.Image,
             IsPrivate = profile.User.IsPrivate,
+            IsVerified = profile.User.IsVerified,
             // Счётчики видны и на приватном чужом профиле (сам контент — через свои эндпоинты).
             PostCount = await _context.Posts.CountAsync(p => p.UserId == userId),
             FollowersCount = await _context.FollowingRelationShips

@@ -15,6 +15,9 @@ public class GetPostDto
     public string UserName { get; set; } = string.Empty;
     public string? UserImage { get; set; }
 
+    /// <summary>Верифицирован ли автор поста («синяя галочка», §10).</summary>
+    public bool IsVerified { get; set; }
+
     public List<string> Images { get; set; } = new();
 
     public int LikeCount { get; set; }

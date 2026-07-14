@@ -13,6 +13,9 @@ public class GetPostCommentDto
     public string UserName { get; set; } = string.Empty;
     public string? UserImage { get; set; }
 
+    /// <summary>Верифицирован ли автор комментария («синяя галочка», §10).</summary>
+    public bool IsVerified { get; set; }
+
     /// <summary>Id родительского комментария (Phase 14); null — комментарий верхнего уровня.</summary>
     public int? ParentCommentId { get; set; }
 

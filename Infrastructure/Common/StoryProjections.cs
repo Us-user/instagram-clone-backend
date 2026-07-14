@@ -23,6 +23,7 @@ public static class StoryProjections
             CreateAt = s.CreatedAt,
             UserId = s.UserId,
             UserAvatar = s.User!.Avatar ?? string.Empty,
+            IsVerified = s.User.IsVerified,
             Audience = s.Audience,
             SharedPostId = s.SharedPostId,
             // Превью репоста (§9): заполнено только если сторис — репост поста.

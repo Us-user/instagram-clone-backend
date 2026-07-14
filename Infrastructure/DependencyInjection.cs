@@ -73,6 +73,7 @@ public static class DependencyInjection
         services.AddScoped<IGroupChatService, GroupChatService>();
         services.AddScoped<IPresenceService, PresenceService>();
         services.AddScoped<ITypingService, TypingService>();
+        services.AddScoped<IAdminService, AdminService>();
 
         // Presence/typing (§1): состояние присутствия и «печатает…» — эфемерное, живёт в памяти
         // между всеми соединениями, поэтому singleton (реализация SignalR-рассылки — в WebApi).

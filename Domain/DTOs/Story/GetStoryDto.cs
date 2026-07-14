@@ -15,6 +15,10 @@ public class GetStoryDto
     public DateTime CreateAt { get; set; }
     public string UserId { get; set; } = string.Empty;
     public string UserAvatar { get; set; } = string.Empty;
+
+    /// <summary>Верифицирован ли автор сторис («синяя галочка», §10).</summary>
+    public bool IsVerified { get; set; }
+
     public ViewerDto ViewerDto { get; set; } = new();
 
     /// <summary>Аудитория сторис (§9).</summary>
