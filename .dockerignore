@@ -1,0 +1,31 @@
+# Артефакты сборки — пересобираются внутри образа
+**/bin/
+**/obj/
+**/out/
+publish/
+artifacts/
+
+# Загруженные в рантайме файлы (не нужны в образе)
+**/wwwroot/images/*
+!**/wwwroot/images/.gitkeep
+**/wwwroot/voice/*
+
+# Секреты и локальная конфигурация
+**/appsettings.Development.json
+**/appsettings.Local.json
+*.env
+.env
+
+# VCS / IDE / OS
+.git/
+.gitignore
+.vs/
+.idea/
+*.user
+.DS_Store
+Thumbs.db
+
+# Документация и служебное (не влияет на образ)
+.claude/
+docs/
+*.md

@@ -8,6 +8,13 @@ using WebApi.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// PaaS-хостинги (Render/Heroku/Railway) передают назначенный порт через переменную
+// окружения PORT. Слушаем её на всех интерфейсах (0.0.0.0), иначе контейнер не пройдёт
+// health-check. Локально переменной нет — работает обычный Kestrel (5000/5001).
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(port))
+    builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
 // ── Сервисы ──────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
 
@@ -59,14 +66,14 @@ using (var scope = app.Services.CreateScope())
 // Глобальная обработка исключений — первым, чтобы ловить ошибки всего конвейера.
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-if (app.Environment.IsDevelopment())
+// Swagger доступен во всех окружениях: это учебный/демо-API, и живой smoke-тест после
+// деплоя удобнее всего гонять через Swagger UI. Открывается на корне (/) и на /swagger.
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Instagram Clone API v1");
-    });
-}
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Instagram Clone API v1");
+    options.RoutePrefix = "swagger";
+});
 
 // Раздача загруженных файлов из wwwroot (картинки постов, аватары, сторис, файлы сообщений).
 app.UseStaticFiles();
@@ -75,6 +82,10 @@ app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Health-check для Render (и корень с указателем на Swagger). Анонимные, лёгкие.
+app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+app.MapGet("/", () => Results.Redirect("/swagger")).AllowAnonymous();
 
 app.MapControllers();
 app.MapHub<ChatHub>("/chatHub");

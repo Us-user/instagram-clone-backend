@@ -1,0 +1,29 @@
+# Render Blueprint — веб-сервис (.NET 8 в Docker) + PostgreSQL.
+# Деплой: Render Dashboard → New → Blueprint → выбрать этот репозиторий.
+# https://render.com/docs/blueprint-spec
+
+databases:
+  - name: instagram-db
+    plan: free              # free-инстанс Postgres (истекает через 30 дней, для демо ок)
+    databaseName: instagram_clone
+    user: instagram
+
+services:
+  - type: web
+    name: instagram-backend
+    runtime: docker
+    plan: free              # free-веб-сервис засыпает при простое, первый запрос ~30с
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      # Строка подключения из созданной выше БД (формат postgresql://… — Program.cs его разбирает).
+      - key: DATABASE_URL
+        fromDatabase:
+          name: instagram-db
+          property: connectionString
+      # Секретный ключ подписи JWT — Render сгенерирует случайное значение.
+      - key: Jwt__Key
+        generateValue: true
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
