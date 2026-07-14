@@ -1,5 +1,6 @@
 using Domain.Entities;
 using Domain.Enums;
+using Infrastructure.Common;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,6 +61,25 @@ public static class DbInitializer
             var diana = await CreateUserAsync(context, userManager, logger,
                 "diana", "Diana Prince", "diana@instaclone.dev", "User123!", Gender.Female,
                 "Приватный аккаунт. Подписки — по запросу.", new[] { UserRole }, isPrivate: true);
+
+            // 2FA (Phase 20): демо-аккаунт с включённой двухфакторной аутентификацией. Фиксированный
+            // TOTP-секрет и известные резервные коды — чтобы login-флоу можно было проверить без
+            // генератора TOTP: login (frank/User123!) → login-2fa { method=Backup, code=ABCD-EFGH }.
+            var frank = await CreateUserAsync(context, userManager, logger,
+                "frank", "Frank Miller", "frank@instaclone.dev", "User123!", Gender.Male,
+                "Демо-аккаунт с включённой 2FA.", new[] { UserRole });
+            frank.TwoFactorEnabled = true;
+            frank.TwoFactorSecret = "JBSWY3DPEHPK3PXP"; // Base32-секрет для приложения-аутентификатора
+            foreach (var code in new[] { "ABCD-EFGH", "JKMN-PQRS", "TUVW-XYZ2" })
+            {
+                context.BackupCodes.Add(new BackupCode
+                {
+                    UserId = frank.Id,
+                    CodeHash = BackupCodeHasher.Hash(code),
+                    IsUsed = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
 
             // Presence (Phase 18): «был(а) в сети» для офлайн-пользователей — чтобы get-status
             // сразу отдавал осмысленный lastSeen. Онлайн определяется по live-соединениям в рантайме.

@@ -26,12 +26,71 @@ public class AccountController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
-    /// <summary>Вход: возвращает JWT в <c>data</c>.</summary>
+    /// <summary>
+    /// Вход. Без 2FA — возвращает JWT в <c>data</c>. При включённой 2FA — вместо токена отдаёт
+    /// признак «нужен второй фактор» и временный <c>twoFactorToken</c> (§11).
+    /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
     {
         var result = await _accountService.LoginAsync(dto);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>Завершение входа со вторым фактором (TOTP/email/резервный код) → JWT (§11). Аноним.</summary>
+    [HttpPost("login-2fa")]
+    [AllowAnonymous]
+    public async Task<IActionResult> LoginTwoFactor([FromBody] Login2FaDto dto)
+    {
+        var result = await _accountService.LoginTwoFactorAsync(dto);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Высылает email-код в рамках login-флоу (пользователь ещё не аутентифицирован — идентификация
+    /// по <c>twoFactorToken</c>). В учебных целях код возвращается в <c>data</c> (§11). Аноним.
+    /// </summary>
+    [HttpPost("send-2fa-email")]
+    [AllowAnonymous]
+    public async Task<IActionResult> SendTwoFactorEmail([FromBody] Send2FaEmailDto dto)
+    {
+        var result = await _accountService.SendTwoFactorEmailAsync(dto);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Включает 2FA для текущего пользователя: возвращает секрет/QR-URI и резервные коды.
+    /// Требует подтверждения через <c>confirm-2fa</c> первым валидным кодом (§11).
+    /// </summary>
+    [HttpPost("enable-2fa")]
+    public async Task<IActionResult> EnableTwoFactor()
+    {
+        var result = await _accountService.EnableTwoFactorAsync();
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>Подтверждает включение 2FA первым валидным TOTP-кодом (§11).</summary>
+    [HttpPost("confirm-2fa")]
+    public async Task<IActionResult> ConfirmTwoFactor([FromQuery] string? code)
+    {
+        var result = await _accountService.ConfirmTwoFactorAsync(code);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>Отключает 2FA по валидному TOTP или резервному коду (§11).</summary>
+    [HttpPost("disable-2fa")]
+    public async Task<IActionResult> DisableTwoFactor([FromQuery] string? code)
+    {
+        var result = await _accountService.DisableTwoFactorAsync(code);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>Перевыпускает пачку одноразовых резервных кодов текущего пользователя (§11).</summary>
+    [HttpPost("regenerate-backup-codes")]
+    public async Task<IActionResult> RegenerateBackupCodes()
+    {
+        var result = await _accountService.RegenerateBackupCodesAsync();
         return StatusCode(result.StatusCode, result);
     }
 

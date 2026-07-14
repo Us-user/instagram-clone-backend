@@ -21,5 +21,9 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.IsPrivate)
             .HasDefaultValue(false);
+
+        // Секрет TOTP (Base32) для 2FA (§11); nullable — задаётся при включении.
+        builder.Property(u => u.TwoFactorSecret)
+            .HasMaxLength(128);
     }
 }

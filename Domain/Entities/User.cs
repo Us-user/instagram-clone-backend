@@ -31,6 +31,14 @@ public class User : IdentityUser<string>
     public bool IsVerified { get; set; }
 
     /// <summary>
+    /// Секрет TOTP для двухфакторной аутентификации (Phase 20, §11). Base32-строка, задаётся при
+    /// <c>enable-2fa</c>, подтверждается первым валидным кодом (<c>confirm-2fa</c>), очищается при
+    /// <c>disable-2fa</c>. Флаг включённости 2FA — стандартный <c>TwoFactorEnabled</c> из
+    /// <see cref="IdentityUser{TKey}"/> (колонка уже есть в AspNetUsers).
+    /// </summary>
+    public string? TwoFactorSecret { get; set; }
+
+    /// <summary>
     /// Приватный ли аккаунт (Phase 12). Быстрый флаг для проверок в лентах/подписках;
     /// источник истины — <see cref="PrivacySettings"/>, с которым синхронизируется.
     /// Новые подписки на приватный аккаунт идут через запрос (<see cref="Enums.FollowStatus.Pending"/>).

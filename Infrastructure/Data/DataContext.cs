@@ -54,6 +54,8 @@ public class DataContext : IdentityDbContext<User, IdentityRole, string>
 
     public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
 
+    public DbSet<BackupCode> BackupCodes => Set<BackupCode>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

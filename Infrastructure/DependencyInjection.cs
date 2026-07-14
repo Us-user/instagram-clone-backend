@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IFileService, FileService>();
+        services.AddScoped<ITotpService, TotpService>();
 
         // Сервисы фич.
         services.AddScoped<IAccountService, AccountService>();
@@ -79,6 +80,10 @@ public static class DependencyInjection
         // между всеми соединениями, поэтому singleton (реализация SignalR-рассылки — в WebApi).
         services.AddSingleton<IPresenceTracker, PresenceTracker>();
         services.AddSingleton<ITypingTracker, TypingTracker>();
+
+        // Login-флоу 2FA (§11): временные токены сессии и email-коды — эфемерное состояние в памяти
+        // (переживать рестарт не нужно, TTL ~10 минут), как presence/typing-трекеры.
+        services.AddSingleton<ITwoFactorTokenStore, TwoFactorTokenStore>();
 
         // AutoMapper: профили из этой сборки.
         services.AddAutoMapper(typeof(MappingProfile).Assembly);
