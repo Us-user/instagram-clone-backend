@@ -1,5 +1,6 @@
 using Infrastructure;
 using Infrastructure.Data.Seed;
+using Microsoft.EntityFrameworkCore;
 using Infrastructure.Services.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 using WebApi.Extensions;
@@ -52,13 +53,32 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
-    try
+
+    // На первом деплое (Render Blueprint и т.п.) веб-сервис может стартовать раньше, чем БД
+    // допровизионится/примет подключения. Ретраим применение миграций/Seed с бэкоффом, иначе
+    // приложение осталось бы без схемы и все запросы к БД возвращали бы 500.
+    const int maxAttempts = 10;
+    var delay = TimeSpan.FromSeconds(3);
+    for (var attempt = 1; attempt <= maxAttempts; attempt++)
     {
-        await DbInitializer.InitializeAsync(scope.ServiceProvider);
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Не удалось применить миграции/Seed при старте (БД недоступна?)");
+        try
+        {
+            await DbInitializer.InitializeAsync(scope.ServiceProvider);
+            logger.LogInformation("Миграции/Seed применены (попытка {Attempt}).", attempt);
+            break;
+        }
+        catch (Exception ex) when (attempt < maxAttempts)
+        {
+            logger.LogWarning(ex,
+                "БД недоступна (попытка {Attempt}/{Max}), повтор через {Delay}с…",
+                attempt, maxAttempts, delay.TotalSeconds);
+            await Task.Delay(delay);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Не удалось применить миграции/Seed после {Max} попыток — БД недоступна?", maxAttempts);
+        }
     }
 }
 
@@ -86,6 +106,24 @@ app.UseAuthorization();
 // Health-check для Render (и корень с указателем на Swagger). Анонимные, лёгкие.
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapGet("/", () => Results.Redirect("/swagger")).AllowAnonymous();
+
+// ВРЕМЕННАЯ диагностика подключения к БД/состояния миграций (удалить после проверки деплоя).
+app.MapGet("/health/db", async (Infrastructure.Data.DataContext db) =>
+{
+    try
+    {
+        var canConnect = await db.Database.CanConnectAsync();
+        var applied = (await db.Database.GetAppliedMigrationsAsync()).ToList();
+        var pending = (await db.Database.GetPendingMigrationsAsync()).ToList();
+        return Results.Ok(new { canConnect, appliedCount = applied.Count, pendingCount = pending.Count, pending });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(
+            new { error = ex.GetType().Name, message = ex.Message, inner = ex.InnerException?.Message },
+            statusCode: 500);
+    }
+}).AllowAnonymous();
 
 app.MapControllers();
 app.MapHub<ChatHub>("/chatHub");
