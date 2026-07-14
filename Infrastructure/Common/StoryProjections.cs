@@ -23,6 +23,16 @@ public static class StoryProjections
             CreateAt = s.CreatedAt,
             UserId = s.UserId,
             UserAvatar = s.User!.Avatar ?? string.Empty,
+            Audience = s.Audience,
+            SharedPostId = s.SharedPostId,
+            // Превью репоста (§9): заполнено только если сторис — репост поста.
+            SharedPost = s.SharedPostId == null ? null : new SharedPostPreviewDto
+            {
+                PostId = s.SharedPost!.Id,
+                UserId = s.SharedPost.UserId,
+                UserName = s.SharedPost.User!.UserName!,
+                ImageName = s.SharedPost.Images.Select(i => i.ImageName).FirstOrDefault()
+            },
             ViewerDto = new ViewerDto
             {
                 UserName = s.User!.UserName!,

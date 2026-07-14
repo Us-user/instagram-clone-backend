@@ -81,4 +81,20 @@ public class StoryController : ControllerBase
         var result = await _storyService.AddStoryViewAsync(storyId);
         return StatusCode(result.StatusCode, result);
     }
+
+    /// <summary>Ответ на активную чужую сторис (§9) — уходит в директ автора. Тело: <c>{ text }</c>.</summary>
+    [HttpPost("reply")]
+    public async Task<IActionResult> Reply([FromQuery] int? storyId, [FromBody] StoryReplyRequestDto dto)
+    {
+        var result = await _storyService.ReplyAsync(storyId, dto);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>Репост чужого публичного поста в свою сторис (§9).</summary>
+    [HttpPost("share-post")]
+    public async Task<IActionResult> SharePost([FromQuery] int? postId)
+    {
+        var result = await _storyService.SharePostAsync(postId);
+        return StatusCode(result.StatusCode, result);
+    }
 }

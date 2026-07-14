@@ -61,6 +61,7 @@ public static class DependencyInjection
         services.AddScoped<IFollowingRelationShipService, FollowingRelationShipService>();
         services.AddScoped<IPostService, PostService>();
         services.AddScoped<IStoryService, StoryService>();
+        services.AddScoped<ICloseFriendService, CloseFriendService>();
         services.AddScoped<IChatService, ChatService>();
         services.AddScoped<IMessageService, MessageService>();
         services.AddScoped<ILocationService, LocationService>();

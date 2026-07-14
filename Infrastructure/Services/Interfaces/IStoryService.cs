@@ -1,3 +1,4 @@
+using Domain.DTOs.Chat;
 using Domain.DTOs.Story;
 using Domain.Responses;
 
@@ -6,6 +7,7 @@ namespace Infrastructure.Services.Interfaces;
 /// <summary>
 /// Сторис с жизнью 24 часа: ленты (подписки/юзер/мои), лайк-тумблер, просмотр (уникально
 /// на юзера), создание из поста или файла, удаление автором. Текущий юзер — из claims.
+/// §9: аудитория close-friends, ответы в директ, репост поста.
 /// </summary>
 public interface IStoryService
 {
@@ -32,4 +34,16 @@ public interface IStoryService
 
     /// <summary>Зафиксировать просмотр сторис (уникально на юзера). Идемпотентно.</summary>
     Task<Response<GetStoryViewDto>> AddStoryViewAsync(int? storyId);
+
+    /// <summary>
+    /// Ответ на активную чужую сторис (§9): уходит в директ автора личным сообщением с привязкой
+    /// к сторис + уведомление <c>StoryReply</c>. Учитывает настройку «кто может отвечать на сторис».
+    /// </summary>
+    Task<Response<GetMessageDto>> ReplyAsync(int? storyId, StoryReplyRequestDto dto);
+
+    /// <summary>
+    /// Репост чужого публичного поста в свою сторис (§9): создаёт сторис со ссылкой на оригинал
+    /// (<c>SharedPostId</c>) + уведомление автору <c>PostShared</c>. Приватные посты репостить нельзя.
+    /// </summary>
+    Task<Response<GetStoryDto>> SharePostAsync(int? postId);
 }

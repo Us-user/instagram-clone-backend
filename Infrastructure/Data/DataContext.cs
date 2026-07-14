@@ -29,6 +29,8 @@ public class DataContext : IdentityDbContext<User, IdentityRole, string>
     public DbSet<Story> Stories => Set<Story>();
     public DbSet<StoryLike> StoryLikes => Set<StoryLike>();
     public DbSet<StoryView> StoryViews => Set<StoryView>();
+    public DbSet<StoryReply> StoryReplies => Set<StoryReply>();
+    public DbSet<CloseFriend> CloseFriends => Set<CloseFriend>();
 
     public DbSet<FollowingRelationShip> FollowingRelationShips => Set<FollowingRelationShip>();
     public DbSet<Chat> Chats => Set<Chat>();

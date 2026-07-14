@@ -24,6 +24,12 @@ public class StoryConfiguration : IEntityTypeConfiguration<Story>
             .HasForeignKey(s => s.PostId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // Репост поста в сторис (§9) опционален; при удалении оригинала ссылка обнуляется.
+        builder.HasOne(s => s.SharedPost)
+            .WithMany()
+            .HasForeignKey(s => s.SharedPostId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         // Лента сторис фильтрует по автору и сроку жизни (< 24ч).
         builder.HasIndex(s => s.UserId);
         builder.HasIndex(s => s.CreatedAt);

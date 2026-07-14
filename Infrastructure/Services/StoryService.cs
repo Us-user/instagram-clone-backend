@@ -1,5 +1,7 @@
+using Domain.DTOs.Chat;
 using Domain.DTOs.Story;
 using Domain.Entities;
+using Domain.Enums;
 using Domain.Exceptions;
 using Domain.Responses;
 using Infrastructure.Common;
@@ -13,19 +15,32 @@ namespace Infrastructure.Services;
 /// Сторис: ленты (подписки/юзер/мои), лайк-тумблер, уникальный просмотр, создание из поста
 /// или файла, удаление автором. Сторис живёт 24 часа — во всех выборках применяется окно
 /// <c>CreatedAt &gt; UtcNow - 24ч</c>. Id текущего юзера берётся из claims; чужую сторис удалять нельзя.
-/// Проекция в DTO — общий <see cref="StoryProjections.ToDto"/>.
+/// Проекция в DTO — общий <see cref="StoryProjections.ToDto"/>. §9: close-friends-аудитория
+/// фильтруется по членству зрителя, ответы уходят в директ, репост поста ссылается на оригинал.
 /// </summary>
 public class StoryService : IStoryService
 {
     private readonly DataContext _context;
     private readonly ICurrentUserService _currentUser;
     private readonly IFileService _fileService;
+    private readonly IChatNotifier _chatNotifier;
+    private readonly INotificationService _notifications;
+    private readonly IMentionService _mentions;
 
-    public StoryService(DataContext context, ICurrentUserService currentUser, IFileService fileService)
+    public StoryService(
+        DataContext context,
+        ICurrentUserService currentUser,
+        IFileService fileService,
+        IChatNotifier chatNotifier,
+        INotificationService notifications,
+        IMentionService mentions)
     {
         _context = context;
         _currentUser = currentUser;
         _fileService = fileService;
+        _chatNotifier = chatNotifier;
+        _notifications = notifications;
+        _mentions = mentions;
     }
 
     /// <summary>Граница активности сторис: моложе 24 часов.</summary>
@@ -42,8 +57,11 @@ public class StoryService : IStoryService
             .Select(f => f.FollowingUserId);
 
         // Группировка по авторам выражена сортировкой: сначала по автору, внутри — свежие выше.
+        // §9: close-friends-сторис показываем только если текущий юзер в близких у автора.
         var stories = await _context.Stories.AsNoTracking()
-            .Where(s => followingIds.Contains(s.UserId) && s.CreatedAt > since)
+            .Where(s => followingIds.Contains(s.UserId) && s.CreatedAt > since
+                && (s.Audience == StoryAudience.All
+                    || _context.CloseFriends.Any(cf => cf.UserId == s.UserId && cf.FriendUserId == currentId)))
             .OrderBy(s => s.UserId)
             .ThenByDescending(s => s.CreatedAt)
             .Select(StoryProjections.ToDto())
@@ -54,14 +72,18 @@ public class StoryService : IStoryService
 
     public async Task<Response<List<GetStoryDto>>> GetUserStoriesAsync(string userId)
     {
-        _currentUser.GetRequiredUserId();
+        var currentId = _currentUser.GetRequiredUserId();
 
         if (string.IsNullOrWhiteSpace(userId))
             throw new BadRequestException("Некорректный Id пользователя.");
 
         var since = ActiveSince;
+        // §9: свои close-friends-сторис видны себе всегда; чужие — только если ты в близких у автора.
         var stories = await _context.Stories.AsNoTracking()
-            .Where(s => s.UserId == userId && s.CreatedAt > since)
+            .Where(s => s.UserId == userId && s.CreatedAt > since
+                && (s.UserId == currentId
+                    || s.Audience == StoryAudience.All
+                    || _context.CloseFriends.Any(cf => cf.UserId == s.UserId && cf.FriendUserId == currentId)))
             .OrderByDescending(s => s.CreatedAt)
             .Select(StoryProjections.ToDto())
             .ToListAsync();
@@ -115,13 +137,19 @@ public class StoryService : IStoryService
         if (id is null or <= 0)
             throw new BadRequestException("Некорректный Id сторис.");
 
-        _currentUser.GetRequiredUserId();
+        var currentId = _currentUser.GetRequiredUserId();
 
         var story = await _context.Stories.AsNoTracking()
             .Where(s => s.Id == id)
             .Select(StoryProjections.ToDto())
             .FirstOrDefaultAsync()
             ?? throw new NotFoundException("Сторис не найдена.");
+
+        // §9: close-friends-сторис доступна только автору и тем, кто у него в близких.
+        if (story.Audience == StoryAudience.CloseFriends
+            && story.UserId != currentId
+            && !await IsCloseFriendOfAsync(story.UserId, currentId))
+            throw new NotFoundException("Сторис не найдена.");
 
         return new Response<GetStoryDto>(story);
     }
@@ -156,6 +184,7 @@ public class StoryService : IStoryService
             UserId = currentId,
             FileName = fileName,
             PostId = sourcePostId,
+            Audience = dto.Audience ?? StoryAudience.All,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -222,6 +251,166 @@ public class StoryService : IStoryService
             StoryId = view.StoryId
         });
     }
+
+    public async Task<Response<GetMessageDto>> ReplyAsync(int? storyId, StoryReplyRequestDto dto)
+    {
+        if (storyId is null or <= 0)
+            throw new BadRequestException("Некорректный Id сторис.");
+        if (dto is null || string.IsNullOrWhiteSpace(dto.Text))
+            throw new BadRequestException("Текст ответа не может быть пустым.");
+
+        var currentId = _currentUser.GetRequiredUserId();
+
+        var story = await _context.Stories.AsNoTracking()
+            .Where(s => s.Id == storyId)
+            .Select(s => new { s.Id, s.UserId, s.Audience, s.CreatedAt })
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundException("Сторис не найдена.");
+
+        // Отвечать можно только на активную (< 24ч) чужую сторис.
+        if (story.CreatedAt <= ActiveSince)
+            throw new BadRequestException("Сторис больше не активна.");
+        if (story.UserId == currentId)
+            throw new BadRequestException("Нельзя ответить на собственную сторис.");
+
+        var authorId = story.UserId;
+
+        // Блокировка в любую сторону — ответ недоступен.
+        if (await AccessGuard.IsBlockBetweenAsync(_context, currentId, authorId))
+            throw new ForbiddenException("Ответ недоступен из-за блокировки.");
+
+        // Close-friends-сторис: ответить может только тот, кто её вообще видит (в близких у автора).
+        if (story.Audience == StoryAudience.CloseFriends
+            && !await IsCloseFriendOfAsync(authorId, currentId))
+            throw new NotFoundException("Сторис не найдена.");
+
+        // Настройка «кто может отвечать на сторис» автора (§6).
+        var whoCanReply = await _context.PrivacySettings.AsNoTracking()
+            .Where(s => s.UserId == authorId)
+            .Select(s => (WhoCanReplyStory?)s.WhoCanReplyStory)
+            .FirstOrDefaultAsync() ?? WhoCanReplyStory.Everyone;
+
+        var allowed = whoCanReply switch
+        {
+            WhoCanReplyStory.Everyone => true,
+            WhoCanReplyStory.Followers => await AccessGuard.IsAcceptedFollowerAsync(_context, currentId, authorId),
+            WhoCanReplyStory.CloseFriends => await IsCloseFriendOfAsync(authorId, currentId),
+            _ => false // Nobody
+        };
+        if (!allowed)
+            throw new ForbiddenException("Автор ограничил ответы на свои сторис.");
+
+        // Ответ уходит в директ: находим/создаём чат 1:1, создаём сообщение + запись-связку.
+        var chat = await GetOrCreateChatAsync(currentId, authorId);
+
+        var message = new Message
+        {
+            Chat = chat,
+            SenderUserId = currentId,
+            MessageText = dto.Text,
+            MessageType = MessageType.Text,
+            CreatedAt = DateTime.UtcNow,
+            IsRead = false
+        };
+        _context.Messages.Add(message);
+
+        var storyReply = new StoryReply
+        {
+            StoryId = story.Id,
+            FromUserId = currentId,
+            Message = message,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.StoryReplies.Add(storyReply);
+
+        await _context.SaveChangesAsync();
+
+        // Уведомление автору сторис (entity — Story, id — самой сторис).
+        await _notifications.CreateAsync(
+            authorId, currentId, NotificationType.StoryReply, NotificationEntityType.Story, story.Id);
+
+        // Упоминания (@username) в тексте ответа (задел StoryReply из Phase 13).
+        await _mentions.ProcessMentionsAsync(
+            dto.Text, currentId, MentionEntityType.StoryReply, storyReply.Id);
+
+        var result = await _context.Messages.AsNoTracking()
+            .Where(m => m.Id == message.Id)
+            .Select(ChatProjections.MessageToDto)
+            .FirstAsync();
+
+        // Реал-тайм доставка сообщения обоим участникам чата.
+        await _chatNotifier.NotifyMessageAsync(chat.User1Id, chat.User2Id, result);
+
+        return new Response<GetMessageDto>(result);
+    }
+
+    public async Task<Response<GetStoryDto>> SharePostAsync(int? postId)
+    {
+        if (postId is null or <= 0)
+            throw new BadRequestException("Некорректный Id поста.");
+
+        var currentId = _currentUser.GetRequiredUserId();
+
+        var post = await _context.Posts.AsNoTracking()
+            .Where(p => p.Id == postId)
+            .Select(p => new { p.Id, p.UserId, IsPrivate = p.User!.IsPrivate })
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundException("Пост не найден.");
+
+        // Репост чужого поста: только публичный автор и без блокировки в любую сторону.
+        if (post.UserId != currentId)
+        {
+            if (await AccessGuard.IsBlockBetweenAsync(_context, currentId, post.UserId))
+                throw new ForbiddenException("Репост недоступен из-за блокировки.");
+            if (post.IsPrivate)
+                throw new ForbiddenException("Нельзя репостить пост из приватного аккаунта.");
+        }
+
+        var story = new Story
+        {
+            UserId = currentId,
+            SharedPostId = post.Id,
+            Audience = StoryAudience.All,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Stories.Add(story);
+        await _context.SaveChangesAsync();
+
+        // Уведомление автору оригинала (правило «не себе» — внутри CreateAsync).
+        await _notifications.CreateAsync(
+            post.UserId, currentId, NotificationType.PostShared, NotificationEntityType.Post, post.Id);
+
+        var result = await _context.Stories.AsNoTracking()
+            .Where(s => s.Id == story.Id)
+            .Select(StoryProjections.ToDto())
+            .FirstAsync();
+
+        return new Response<GetStoryDto>(result);
+    }
+
+    /// <summary>Находит существующий чат 1:1 или создаёт новый (нормализованный порядок участников).</summary>
+    private async Task<Chat> GetOrCreateChatAsync(string currentId, string otherId)
+    {
+        var (user1, user2) = string.CompareOrdinal(currentId, otherId) <= 0
+            ? (currentId, otherId)
+            : (otherId, currentId);
+
+        var chat = await _context.Chats
+            .FirstOrDefaultAsync(c => c.User1Id == user1 && c.User2Id == user2);
+
+        if (chat is null)
+        {
+            chat = new Chat { User1Id = user1, User2Id = user2, CreatedAt = DateTime.UtcNow };
+            _context.Chats.Add(chat);
+        }
+
+        return chat;
+    }
+
+    /// <summary>В близких ли <paramref name="viewerId"/> у пользователя <paramref name="ownerId"/>.</summary>
+    private Task<bool> IsCloseFriendOfAsync(string ownerId, string viewerId) =>
+        _context.CloseFriends.AnyAsync(cf => cf.UserId == ownerId && cf.FriendUserId == viewerId);
 
     /// <summary>Гарантирует существование сторис; иначе <see cref="NotFoundException"/> (404).</summary>
     private async Task EnsureStoryExistsAsync(int storyId)

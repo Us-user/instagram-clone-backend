@@ -115,11 +115,22 @@ public static class DbInitializer
             var groupAliceHi = SeedGroupChat(context, admin, alice, bob);
 
             // 8b. Пример личного чата (Phase 16): alice ↔ bob с ответом (reply).
-            var directAliceMsg = SeedDirectChat(context, alice, bob);
+            var (directChat, directAliceMsg) = SeedDirectChat(context, alice, bob);
+
+            // 8c. Сторис alice (Phase 17): обычная (All) и для близких друзей (CloseFriends).
+            var (aliceStoryAll, aliceStoryCf) = SeedStories(context, alice);
+
+            // 8d. Близкие друзья (Phase 17): alice добавила bob → bob видит её CloseFriends-сторис.
+            context.CloseFriends.Add(new CloseFriend
+            {
+                UserId = alice.Id,
+                FriendUserId = bob.Id,
+                CreatedAt = DateTime.UtcNow.AddHours(-6)
+            });
 
             await context.SaveChangesAsync();
 
-            // 8c. Реакции (§8, после SaveChanges — нужны Id сообщений): в группе admin ❤️ и bob 🔥
+            // 8e. Реакции (§8, после SaveChanges — нужны Id сообщений): в группе admin ❤️ и bob 🔥
             // на сообщение alice; в личке bob 😂 на сообщение alice. Правило «не себе» соблюдено.
             context.MessageReactions.AddRange(
                 new MessageReaction
@@ -147,8 +158,59 @@ public static class DbInitializer
                     CreatedAt = DateTime.UtcNow.AddMinutes(-38)
                 });
 
+            // 8f. Ответ bob на сторис alice (Phase 17): личное сообщение в чат alice↔bob + связка StoryReply.
+            var bobStoryReplyMsg = new Message
+            {
+                ChatId = directChat.Id,
+                SenderUserId = bob.Id,
+                MessageText = "Огонь! 🔥 Классная сторис.",
+                MessageType = MessageType.Text,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow.AddMinutes(-12)
+            };
+            context.Messages.Add(bobStoryReplyMsg);
+            context.StoryReplies.Add(new StoryReply
+            {
+                StoryId = aliceStoryAll.Id,
+                FromUserId = bob.Id,
+                Message = bobStoryReplyMsg,
+                CreatedAt = DateTime.UtcNow.AddMinutes(-12)
+            });
+
+            // 8g. Репост поста alice в сторис bob (Phase 17): сторис со ссылкой на оригинал.
+            context.Stories.Add(new Story
+            {
+                UserId = bob.Id,
+                SharedPostId = alicePost.Id,
+                Audience = StoryAudience.All,
+                CreatedAt = DateTime.UtcNow.AddMinutes(-15)
+            });
+
+            // 8h. Уведомления Phase 17: alice получает StoryReply (bob) и PostShared (bob).
+            context.Notifications.AddRange(
+                new Notification
+                {
+                    RecipientUserId = alice.Id,
+                    ActorUserId = bob.Id,
+                    Type = NotificationType.StoryReply,
+                    EntityType = NotificationEntityType.Story,
+                    EntityId = aliceStoryAll.Id,
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow.AddMinutes(-12)
+                },
+                new Notification
+                {
+                    RecipientUserId = alice.Id,
+                    ActorUserId = bob.Id,
+                    Type = NotificationType.PostShared,
+                    EntityType = NotificationEntityType.Post,
+                    EntityId = alicePost.Id,
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow.AddMinutes(-15)
+                });
+
             await context.SaveChangesAsync();
-            logger.LogInformation("Seed: тестовые пользователи, подписки, посты, хэштеги, упоминания, уведомления, группа, личный чат и реакции созданы");
+            logger.LogInformation("Seed: тестовые пользователи, подписки, посты, хэштеги, упоминания, уведомления, группа, личный чат, реакции, сторис, близкие друзья, ответ на сторис и репост поста созданы");
         }
 
         // 7. Справочник локаций.
@@ -337,10 +399,10 @@ public static class DbInitializer
 
     /// <summary>
     /// Пример личного чата (Phase 16): alice ↔ bob с ответом (reply) bob на первое сообщение alice.
-    /// Возвращает сообщение alice — на него вешается тестовая реакция (Direct). Id проставляются на
-    /// общем SaveChanges.
+    /// Возвращает чат (для ответа на сторис в Phase 17) и сообщение alice (на него вешается тестовая
+    /// реакция Direct). Id проставляются на общем SaveChanges.
     /// </summary>
-    private static Message SeedDirectChat(DataContext context, User alice, User bob)
+    private static (Chat Chat, Message AliceMsg) SeedDirectChat(DataContext context, User alice, User bob)
     {
         var createdAt = DateTime.UtcNow.AddMinutes(-40);
 
@@ -374,7 +436,36 @@ public static class DbInitializer
         };
 
         context.Chats.Add(chat);
-        return aliceMsg;
+        return (chat, aliceMsg);
+    }
+
+    /// <summary>
+    /// Пример сторис alice (Phase 17): обычная (<see cref="StoryAudience.All"/>) и для «близких
+    /// друзей» (<see cref="StoryAudience.CloseFriends"/>). Обе активны (моложе 24ч). Файлы —
+    /// плейсхолдеры (реальных изображений в сиде нет). Id проставляются на общем SaveChanges.
+    /// </summary>
+    private static (Story All, Story Cf) SeedStories(DataContext context, User alice)
+    {
+        var now = DateTime.UtcNow;
+
+        var storyAll = new Story
+        {
+            UserId = alice.Id,
+            FileName = "seed-story-alice.jpg",
+            Audience = StoryAudience.All,
+            CreatedAt = now.AddHours(-2)
+        };
+
+        var storyCf = new Story
+        {
+            UserId = alice.Id,
+            FileName = "seed-story-alice-closefriends.jpg",
+            Audience = StoryAudience.CloseFriends,
+            CreatedAt = now.AddHours(-1)
+        };
+
+        context.Stories.AddRange(storyAll, storyCf);
+        return (storyAll, storyCf);
     }
 
     /// <summary>
