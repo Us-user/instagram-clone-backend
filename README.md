@@ -54,8 +54,9 @@ SignalR (чат, групповые чаты, уведомления, presence/t
 dotnet build
 dotnet run --project WebApi
 ```
-Swagger UI (в Development): `http://localhost:<port>/swagger` — есть кнопка **Authorize**
-для передачи JWT (вставляется сам токен, без префикса `Bearer `).
+Swagger UI: `http://localhost:<port>/swagger` (корень `/` редиректит туда) — есть кнопка
+**Authorize** для передачи JWT (вставляется сам токен, без префикса `Bearer `). Swagger
+включён во всех окружениях, чтобы гонять smoke-тест и на задеплоенном сервере.
 
 ## Миграции (EF Core)
 Миграции и Seed применяются **автоматически при старте** приложения (`DbInitializer`) —
@@ -65,6 +66,29 @@ Swagger UI (в Development): `http://localhost:<port>/swagger` — есть кн
 dotnet ef migrations add <Name> --project Infrastructure --startup-project WebApi
 dotnet ef database update --project Infrastructure --startup-project WebApi
 ```
+
+## Деплой на Render
+В репозитории есть `Dockerfile` (multi-stage SDK 8 → ASP.NET 8) и `render.yaml` (Blueprint),
+который поднимает **web-сервис (Docker)** и **PostgreSQL** сразу вместе.
+
+1. Render Dashboard → **New → Blueprint** → выбрать этот репозиторий (при первом разе —
+   авторизовать GitHub-приложение Render).
+2. Render читает `render.yaml`, показывает план (1 web + 1 Postgres) → **Apply**.
+3. Дождаться сборки образа и провижининга БД. URL сервиса вида
+   `https://instagram-backend.onrender.com` → открыть `/swagger`.
+
+Что делает `render.yaml` автоматически:
+- `DATABASE_URL` — прокидывается из созданной БД (формат `postgresql://…`; парсится в
+  `DependencyInjection.ResolveConnectionString` с включённым SSL);
+- `Jwt__Key` — генерируется Render (случайный секрет ≥ 256 бит для HS256);
+- `ASPNETCORE_ENVIRONMENT=Production`; health-check — `GET /health`.
+
+Приложение слушает порт из переменной `PORT` (её задаёт Render) на `0.0.0.0`. Миграции и
+Seed применяются при старте автоматически.
+
+> ⚠️ Free-план: web-сервис засыпает при простое (первый запрос ~30 с), а free-инстанс
+> Postgres истекает через 30 дней. Загруженные файлы в `wwwroot` эфемерны между деплоями
+> (для постоянного хранения нужен платный Render Disk) — для демо это приемлемо.
 
 ## Тестовые аккаунты (Seed)
 При первом запуске создаются роли `Admin`/`User` и тестовые пользователи с профилями:
