@@ -40,6 +40,10 @@ public interface IPostService
     /// <summary>Добавить комментарий к посту или ответ на комментарий (parentCommentId).</summary>
     Task<Response<GetPostCommentDto>> AddCommentAsync(AddPostCommentDto dto);
 
+    /// <summary>Комментарии поста верхнего уровня (без ответов) с пагинацией; скрывает заблокированных.</summary>
+    Task<PagedResponse<List<GetPostCommentDto>>> GetCommentsAsync(
+        int? postId, int? pageNumber, int? pageSize);
+
     /// <summary>Тумблер лайка комментария. Возвращает новое состояние (true — лайкнут).</summary>
     Task<Response<bool>> LikeCommentAsync(int? commentId);
 

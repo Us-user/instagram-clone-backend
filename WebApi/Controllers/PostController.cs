@@ -106,6 +106,17 @@ public class PostController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
+    /// <summary>Комментарии поста верхнего уровня (без ответов) с пагинацией.</summary>
+    [HttpGet("get-comments")]
+    public async Task<IActionResult> GetComments(
+        [FromQuery] int? postId,
+        [FromQuery] int? pageNumber,
+        [FromQuery] int? pageSize)
+    {
+        var result = await _postService.GetCommentsAsync(postId, pageNumber, pageSize);
+        return StatusCode(result.StatusCode, result);
+    }
+
     /// <summary>Тумблер лайка комментария.</summary>
     [HttpPost("like-comment")]
     public async Task<IActionResult> LikeComment([FromQuery] int? commentId)

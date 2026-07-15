@@ -347,6 +347,44 @@ public class PostService : IPostService
         return new Response<GetPostCommentDto>(result);
     }
 
+    public async Task<PagedResponse<List<GetPostCommentDto>>> GetCommentsAsync(
+        int? postId, int? pageNumber, int? pageSize)
+    {
+        if (postId is null or <= 0)
+            throw new BadRequestException("Некорректный Id поста.");
+
+        var currentId = _currentUser.GetRequiredUserId();
+        var (page, size) = Pagination.Normalize(pageNumber, pageSize);
+
+        // Скрытый по блокировке/приватности пост недоступен так же, как несуществующий.
+        var postVisible = await _context.Posts.AsNoTracking()
+            .Where(p => p.Id == postId)
+            .VisibleTo(_context, currentId)
+            .AnyAsync();
+        if (!postVisible)
+            throw new NotFoundException("Пост не найден.");
+
+        // Скрываем комментарии авторов, с которыми есть блокировка в любую сторону.
+        var blockedIds = AccessGuard.BlockRelatedUserIds(_context, currentId);
+
+        // Только верхний уровень (ParentCommentId == null); ответы отдаёт get-comment-replies.
+        var query = _context.PostComments.AsNoTracking()
+            .Where(c => c.PostId == postId && c.ParentCommentId == null && !blockedIds.Contains(c.UserId))
+            .OrderByDescending(c => c.CreatedAt);
+
+        var total = await query.CountAsync();
+
+        var comments = await query
+            .Skip((page - 1) * size)
+            .Take(size)
+            .Select(CommentProjections.ToDto(currentId))
+            .ToListAsync();
+
+        await MentionEnrichment.EnrichCommentsAsync(_context, comments);
+
+        return new PagedResponse<List<GetPostCommentDto>>(comments, total, page, size);
+    }
+
     public async Task<Response<bool>> LikeCommentAsync(int? commentId)
     {
         if (commentId is null or <= 0)
