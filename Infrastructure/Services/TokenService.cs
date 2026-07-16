@@ -10,20 +10,21 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Infrastructure.Services;
 
-/// <summary>Генерирует подписанный HMAC-SHA256 JWT из параметров секции "Jwt".</summary>
+/// <summary>Генерирует подписанный HMAC-SHA256 access-токен (JWT) из параметров секции "Jwt".</summary>
 public class TokenService : ITokenService
 {
     private readonly JwtOptions _options;
 
     public TokenService(IOptions<JwtOptions> options) => _options = options.Value;
 
-    public string GenerateToken(User user, IEnumerable<string> roles)
+    public string GenerateAccessToken(User user, IEnumerable<string> roles, Guid sessionId)
     {
         var claims = new List<Claim>
         {
             new(CustomClaims.UserId, user.Id),
             new(CustomClaims.UserName, user.UserName ?? string.Empty),
             new(CustomClaims.Email, user.Email ?? string.Empty),
+            new(CustomClaims.SessionId, sessionId.ToString()),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
@@ -36,7 +37,7 @@ public class TokenService : ITokenService
             audience: _options.Audience,
             claims: claims,
             notBefore: DateTime.UtcNow,
-            expires: DateTime.UtcNow.AddMinutes(_options.LifetimeMinutes),
+            expires: DateTime.UtcNow.AddMinutes(_options.AccessTokenLifetimeMinutes),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

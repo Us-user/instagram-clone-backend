@@ -55,6 +55,15 @@ public static class DependencyInjection
         services.AddScoped<IFileService, FileService>();
         services.AddScoped<ITotpService, TotpService>();
 
+        // Модуль сессий (access + refresh): управление сессиями, определение устройства и геолокация.
+        services.AddScoped<ISessionService, SessionService>();
+        services.AddScoped<IDeviceInfoService, DeviceInfoService>();
+        services.AddSingleton<IGeoLocationService, GeoLocationService>();
+        // Троттлинг записи LastActivityAt — эфемерное состояние в памяти (как presence/typing-трекеры).
+        services.AddSingleton<ISessionActivityThrottle, SessionActivityThrottle>();
+        // Фоновая очистка истёкших/давно отозванных сессий (раз в сутки).
+        services.AddHostedService<SessionCleanupService>();
+
         // Сервисы фич.
         services.AddScoped<IAccountService, AccountService>();
         services.AddScoped<IUserService, UserService>();

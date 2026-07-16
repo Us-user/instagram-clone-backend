@@ -56,6 +56,8 @@ public class DataContext : IdentityDbContext<User, IdentityRole, string>
 
     public DbSet<BackupCode> BackupCodes => Set<BackupCode>();
 
+    public DbSet<UserSession> UserSessions => Set<UserSession>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

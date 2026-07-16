@@ -14,8 +14,13 @@ namespace WebApi.Controllers;
 public class AccountController : ControllerBase
 {
     private readonly IAccountService _accountService;
+    private readonly ISessionService _sessionService;
 
-    public AccountController(IAccountService accountService) => _accountService = accountService;
+    public AccountController(IAccountService accountService, ISessionService sessionService)
+    {
+        _accountService = accountService;
+        _sessionService = sessionService;
+    }
 
     /// <summary>Регистрация: создаёт пользователя и пустой профиль, возвращает JWT.</summary>
     [HttpPost("register")]
@@ -38,12 +43,32 @@ public class AccountController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
-    /// <summary>Завершение входа со вторым фактором (TOTP/email/резервный код) → JWT (§11). Аноним.</summary>
+    /// <summary>Завершение входа со вторым фактором (TOTP/email/резервный код) → пара токенов (§11). Аноним.</summary>
     [HttpPost("login-2fa")]
     [AllowAnonymous]
     public async Task<IActionResult> LoginTwoFactor([FromBody] Login2FaDto dto)
     {
         var result = await _accountService.LoginTwoFactorAsync(dto);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>
+    /// Обновляет пару токенов по refresh-токену (ротация + reuse-detection). Аноним: access-токен уже
+    /// истёк, поэтому эндпоинт не требует авторизации; идентификация — по самому refresh-токену.
+    /// </summary>
+    [HttpPost("refresh-token")]
+    [AllowAnonymous]
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenDto dto)
+    {
+        var result = await _sessionService.RefreshAsync(dto);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    /// <summary>Выход: отзывает текущую сессию (по <c>sessionId</c> из claims).</summary>
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        var result = await _sessionService.LogoutAsync();
         return StatusCode(result.StatusCode, result);
     }
 

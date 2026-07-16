@@ -17,6 +17,9 @@ public class CurrentUserService : ICurrentUserService
     public string? UserId => Principal?.FindFirstValue(CustomClaims.UserId);
     public string? UserName => Principal?.FindFirstValue(CustomClaims.UserName);
     public string? Email => Principal?.FindFirstValue(CustomClaims.Email);
+
+    public Guid? SessionId =>
+        Guid.TryParse(Principal?.FindFirstValue(CustomClaims.SessionId), out var id) ? id : null;
     public bool IsAuthenticated => Principal?.Identity?.IsAuthenticated ?? false;
     public bool IsInRole(string role) => Principal?.IsInRole(role) ?? false;
 

@@ -31,6 +31,7 @@
     <!-- Генерация JWT в TokenService. 7.1.2 совпадает с версией IdentityModel,
          которую транзитивно тянет ASP.NET Core 8.0.11 JwtBearer в WebApi — без конфликта версий. -->
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.1.2" />
+    <PackageReference Include="UAParser" Version="3.1.47" />
   </ItemGroup>
 
   <ItemGroup>

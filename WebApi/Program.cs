@@ -69,6 +69,9 @@ app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 
+// После аутентификации: мгновенная проверка отзыва сессии + троттлинг-обновление активности.
+app.UseMiddleware<SessionValidationMiddleware>();
+
 // Health-check для Render (и корень с указателем на Swagger). Анонимные, лёгкие.
 app.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapGet("/", () => Results.Redirect("/swagger")).AllowAnonymous();

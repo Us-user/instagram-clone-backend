@@ -199,6 +199,56 @@ public class NotificationService : INotificationService
         await _notifier.NotifyAsync(recipientUserId, dto);
     }
 
+    public async Task CreateNewLoginNotificationAsync(string userId)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            return;
+
+        // Уведомление «о себе»: получатель и инициатор — один и тот же пользователь, поэтому правило
+        // «не себе» здесь намеренно не применяется. Ссылается на профиль (EntityType.User), без EntityId.
+        var notification = new Notification
+        {
+            RecipientUserId = userId,
+            ActorUserId = userId,
+            Type = NotificationType.NewLogin,
+            EntityType = NotificationEntityType.User,
+            EntityId = null,
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Notifications.Add(notification);
+        await _context.SaveChangesAsync();
+
+        var actor = await _context.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => new NotificationActorDto
+            {
+                Id = u.Id,
+                UserName = u.UserName!,
+                Avatar = u.Avatar,
+                IsVerified = u.IsVerified
+            })
+            .FirstOrDefaultAsync();
+
+        if (actor is null)
+            return;
+
+        var dto = new GetNotificationDto
+        {
+            Id = notification.Id,
+            Type = notification.Type,
+            EntityType = notification.EntityType,
+            EntityId = notification.EntityId,
+            Actors = new List<NotificationActorDto> { actor },
+            ActorsCount = 1,
+            IsRead = false,
+            CreatedAt = notification.CreatedAt
+        };
+
+        await _notifier.NotifyAsync(userId, dto);
+    }
+
     /// <summary>
     /// Схлопывает плоский список (упорядочен по <c>CreatedAt</c> убыванию) в группы:
     /// подряд идущие уведомления с одинаковым ключом <c>(Type, EntityType, EntityId)</c>,

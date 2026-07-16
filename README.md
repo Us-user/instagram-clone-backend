@@ -41,12 +41,18 @@ SignalR (чат, групповые чаты, уведомления, presence/t
     "Issuer": "InstagramClone",
     "Audience": "InstagramCloneUsers",
     "Key": "CHANGE_ME_super_secret_signing_key_at_least_32_chars_long",
-    "LifetimeMinutes": 1440
+    "LifetimeMinutes": 1440,
+    "AccessTokenLifetimeMinutes": 15,
+    "RefreshTokenLifetimeDays": 30,
+    "MaxActiveSessionsPerUser": 10
   }
 }
 ```
 
 - `Jwt:Key` должен быть **не короче 32 символов** (HMAC-SHA256) — обязательно замените плейсхолдер.
+- `AccessTokenLifetimeMinutes` (15) — срок access-токена; `RefreshTokenLifetimeDays` (30) — срок
+  refresh-токена/сессии; `MaxActiveSessionsPerUser` (10, `0` — без лимита) — при превышении при новом
+  входе отзывается самая старая сессия. `LifetimeMinutes` — легаси-поле, больше не используется.
 - Для локальной разработки переопределения можно вынести в `WebApi/appsettings.Development.json`.
 
 ## Запуск
@@ -108,18 +114,39 @@ Seed применяются при старте автоматически.
 уведомления, упоминания, Explore-контент вокруг `alice` и справочник локаций.
 
 ## Аутентификация и авторизация
-- Аутентификация — **JWT Bearer**. Токен выдаётся `/Account/register` и `/Account/login` в поле `data`.
+- Аутентификация — **JWT Bearer** по схеме **access + refresh** (активные сеансы).
+  `/Account/login` (без 2FA), `/Account/login-2fa`, `/Account/register` и `/Account/refresh-token`
+  возвращают в `data` пару токенов `AuthResultDto`:
+  ```jsonc
+  { "accessToken": "<JWT>", "refreshToken": "<opaque>", "expiresIn": 900, "sessionId": "<guid>" }
+  ```
+  - **Access-токен** (JWT) — короткоживущий (**15 мин**), кладётся в заголовок `Authorization: Bearer`.
+  - **Refresh-токен** — долгоживущий (**30 дней**), хранится в БД только хэшем; в открытом виде
+    выдаётся один раз. Обновление пары — `POST /Account/refresh-token { refreshToken }` с **ротацией**
+    (старый refresh инвалидируется) и **reuse-detection** (повторное предъявление уже
+    ротированного/отозванного токена → все сессии юзера отзываются, `401`).
+  - ⚠️ **Изменение контракта относительно базы:** раньше `/Account/login` и `/Account/register`
+    возвращали одну JWT-строку в `data`. Теперь — объект `AuthResultDto` (пара токенов). Остальные
+    эндпоинты по контракту не изменились.
 - **Все эндпоинты защищены по умолчанию** (fallback-политика `RequireAuthenticatedUser`).
-  Открыты только `register`, `login`, `login-2fa`, `send-2fa-email`, `ForgotPassword`, `ResetPassword`
-  (помечены `[AllowAnonymous]`).
-- **Id текущего пользователя всегда берётся из JWT-claims**, а не из параметров запроса.
+  Открыты только `register`, `login`, `login-2fa`, `send-2fa-email`, `refresh-token`,
+  `ForgotPassword`, `ResetPassword` (помечены `[AllowAnonymous]`).
+- **Id текущего пользователя/сессии всегда берётся из JWT-claims**, а не из параметров запроса.
 - Владелец ресурса: удалять чужие посты/комменты/сторис/сообщения нельзя (`403 Forbidden`);
   админ-действия (`/Admin/*`, `delete-user`) — только роль `Admin`; действия в группах — по роли
   участника (`Admin`/`Member`).
-- Claims в токене: `userId`, `userName`, `email`, `role`.
+- Claims в токене: `userId`, `userName`, `email`, `sessionId`, `role`.
+- **Активные сеансы:** при логине создаётся `UserSession` (устройство/браузер/ОС из `User-Agent`,
+  IP с учётом `X-Forwarded-For`, примерная геолокация по IP). Отзыв сессии проверяется middleware на
+  **каждом** авторизованном запросе — завершение сеанса действует мгновенно, а не через 15 мин.
+  Управление — `GET /Session/get-active-sessions`, `DELETE /Session/revoke-session?sessionId`,
+  `DELETE /Session/revoke-all-others`, `POST /Account/logout`. Вход с нового устройства/IP шлёт
+  уведомление `NewLogin` (SignalR); смена/сброс пароля и отключение 2FA отзывают прочие сессии.
+  Истёкшие/давно отозванные сессии убирает фоновая `SessionCleanupService` (раз в сутки).
 - **Двухфакторная аутентификация (2FA):** если у аккаунта включена 2FA, `/Account/login` вместо
-  JWT возвращает `{ requiresTwoFactor, twoFactorToken, methods[] }`; далее клиент вызывает
-  `/Account/login-2fa` с одноразовым кодом (`Totp` / `Email` / `Backup`) и получает JWT.
+  пары токенов возвращает `{ requiresTwoFactor, twoFactorToken, methods[] }`; далее клиент вызывает
+  `/Account/login-2fa` с одноразовым кодом (`Totp` / `Email` / `Backup`) и получает пару токенов
+  (сессия создаётся только после второго фактора).
   Управление — `enable-2fa` → `confirm-2fa`, `disable-2fa`, `regenerate-backup-codes`.
 - **Приватность и блокировки** (Phase 12) проверяются во всех выдачах контента (ленты, поиск,
   сторис, хэштеги, чат, presence, explore): заблокированным (в любую сторону) контент/статусы не
@@ -150,9 +177,11 @@ Seed применяются при старте автоматически.
 ### Account — `/Account`
 | Метод | Путь | Параметры |
 |---|---|---|
-| POST | `register` 🔓 | body `RegisterDto` |
-| POST | `login` 🔓 | body `LoginDto` (при 2FA → `TwoFactorRequiredDto`) |
-| POST | `login-2fa` 🔓 | body `Login2FaDto` (twoFactorToken, code, method) |
+| POST | `register` 🔓 | body `RegisterDto` → `AuthResultDto` (пара токенов) |
+| POST | `login` 🔓 | body `LoginDto` → `AuthResultDto` (при 2FA → `TwoFactorRequiredDto`) |
+| POST | `login-2fa` 🔓 | body `Login2FaDto` (twoFactorToken, code, method) → `AuthResultDto` |
+| POST | `refresh-token` 🔓 | body `RefreshTokenDto` (refreshToken) → `AuthResultDto` |
+| POST | `logout` | — (отзывает текущую сессию) |
 | POST | `send-2fa-email` 🔓 | body `Send2FaEmailDto` (twoFactorToken) |
 | POST | `enable-2fa` | — (секрет + QR + backup-коды) |
 | POST | `confirm-2fa` | `?code` (активирует 2FA) |
@@ -161,6 +190,13 @@ Seed применяются при старте автоматически.
 | DELETE | `ForgotPassword` 🔓 | `?email` |
 | DELETE | `ResetPassword` 🔓 | `?token&email&password&confirmPassword` |
 | PUT | `ChangePassword` | `?oldPassword&password&confirmPassword` |
+
+### Session — `/Session`
+| Метод | Путь | Параметры |
+|---|---|---|
+| GET | `get-active-sessions` | — (текущая сессия первой) |
+| DELETE | `revoke-session` | `?sessionId` (только свою) |
+| DELETE | `revoke-all-others` | — (выйти на всех других устройствах) |
 
 ### User — `/User`
 | Метод | Путь | Параметры |

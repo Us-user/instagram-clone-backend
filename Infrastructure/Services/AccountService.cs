@@ -28,7 +28,7 @@ public class AccountService : IAccountService
     private const int BackupCodesCount = 10;
 
     private readonly UserManager<User> _userManager;
-    private readonly ITokenService _tokenService;
+    private readonly ISessionService _sessionService;
     private readonly ICurrentUserService _currentUser;
     private readonly DataContext _context;
     private readonly ITotpService _totpService;
@@ -41,7 +41,7 @@ public class AccountService : IAccountService
 
     public AccountService(
         UserManager<User> userManager,
-        ITokenService tokenService,
+        ISessionService sessionService,
         ICurrentUserService currentUser,
         DataContext context,
         ITotpService totpService,
@@ -53,7 +53,7 @@ public class AccountService : IAccountService
         ILogger<AccountService> logger)
     {
         _userManager = userManager;
-        _tokenService = tokenService;
+        _sessionService = sessionService;
         _currentUser = currentUser;
         _context = context;
         _totpService = totpService;
@@ -65,7 +65,7 @@ public class AccountService : IAccountService
         _logger = logger;
     }
 
-    public async Task<Response<string>> RegisterAsync(RegisterDto dto)
+    public async Task<Response<AuthResultDto>> RegisterAsync(RegisterDto dto)
     {
         await _registerValidator.ValidateAndThrowAsync(dto);
 
@@ -93,8 +93,10 @@ public class AccountService : IAccountService
         await _context.SaveChangesAsync();
 
         var roles = await _userManager.GetRolesAsync(user);
-        var token = _tokenService.GenerateToken(user, roles);
-        return new Response<string>(token);
+        // Сразу открываем сессию и выдаём пару токенов (как логин). Уведомление о новом входе не шлём —
+        // это первый вход после регистрации.
+        var auth = await _sessionService.CreateSessionAsync(user, roles, notifyOnNewDevice: false);
+        return new Response<AuthResultDto>(auth);
     }
 
     public async Task<Response<object>> LoginAsync(LoginDto dto)
@@ -124,10 +126,10 @@ public class AccountService : IAccountService
             return new Response<object>(payload);
         }
 
-        // Без 2FA — прежнее поведение: JWT-строка в data (контракт базы неизменен).
+        // Без 2FA — создаём сессию и возвращаем пару токенов (access + refresh).
         var roles = await _userManager.GetRolesAsync(user);
-        var token = _tokenService.GenerateToken(user, roles);
-        return new Response<object>(token);
+        var auth = await _sessionService.CreateSessionAsync(user, roles, notifyOnNewDevice: true);
+        return new Response<object>(auth);
     }
 
     public async Task<Response<string>> ForgotPasswordAsync(string? email)
@@ -166,6 +168,9 @@ public class AccountService : IAccountService
         if (!result.Succeeded)
             throw new BadRequestException(string.Join("; ", result.Errors.Select(e => e.Description)));
 
+        // Безопасность: сброс пароля завершает все активные сессии (запрос анонимный — текущей сессии нет).
+        await _sessionService.RevokeAllForUserAsync(user.Id);
+
         return new Response<string>("Пароль успешно сброшен.");
     }
 
@@ -188,12 +193,15 @@ public class AccountService : IAccountService
         if (!result.Succeeded)
             throw new BadRequestException(string.Join("; ", result.Errors.Select(e => e.Description)));
 
+        // Безопасность: смена пароля завершает все прочие сессии, кроме текущей.
+        await _sessionService.RevokeAllOtherForCurrentAsync(userId);
+
         return new Response<string>("Пароль успешно изменён.");
     }
 
     // ── Двухфакторная аутентификация (§11) ────────────────────────────────────────
 
-    public async Task<Response<string>> LoginTwoFactorAsync(Login2FaDto dto)
+    public async Task<Response<AuthResultDto>> LoginTwoFactorAsync(Login2FaDto dto)
     {
         await _login2FaValidator.ValidateAndThrowAsync(dto);
 
@@ -221,9 +229,10 @@ public class AccountService : IAccountService
 
         _twoFactorStore.InvalidateLoginToken(dto.TwoFactorToken);
 
+        // Второй фактор пройден — только теперь создаём сессию и выдаём пару токенов.
         var roles = await _userManager.GetRolesAsync(user);
-        var token = _tokenService.GenerateToken(user, roles);
-        return new Response<string>(token);
+        var auth = await _sessionService.CreateSessionAsync(user, roles, notifyOnNewDevice: true);
+        return new Response<AuthResultDto>(auth);
     }
 
     public async Task<Response<Enable2FaResultDto>> EnableTwoFactorAsync()
@@ -307,6 +316,9 @@ public class AccountService : IAccountService
 
         _context.BackupCodes.RemoveRange(_context.BackupCodes.Where(b => b.UserId == userId));
         await _context.SaveChangesAsync();
+
+        // Безопасность: отключение 2FA завершает все прочие сессии, кроме текущей.
+        await _sessionService.RevokeAllOtherForCurrentAsync(userId);
 
         return new Response<string>("Двухфакторная аутентификация отключена.");
     }

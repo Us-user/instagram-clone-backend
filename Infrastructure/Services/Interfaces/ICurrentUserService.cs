@@ -10,6 +10,10 @@ public interface ICurrentUserService
 
     string? UserName { get; }
     string? Email { get; }
+
+    /// <summary>Id текущей сессии из claim <c>sessionId</c> (или <c>null</c> для анонима/легаси-токена).</summary>
+    Guid? SessionId { get; }
+
     bool IsAuthenticated { get; }
     bool IsInRole(string role);
 

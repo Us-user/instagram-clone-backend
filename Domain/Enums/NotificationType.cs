@@ -34,5 +34,8 @@ public enum NotificationType
     StoryReply = 8,
 
     /// <summary>Ваш пост репостнули в сторис.</summary>
-    PostShared = 9
+    PostShared = 9,
+
+    /// <summary>Новый вход в аккаунт с ранее не встречавшегося устройства/IP (модуль сессий).</summary>
+    NewLogin = 10
 }

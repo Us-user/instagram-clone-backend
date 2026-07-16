@@ -8,17 +8,21 @@ namespace Infrastructure.Services.Interfaces;
 /// </summary>
 public interface IAccountService
 {
-    /// <summary>Регистрирует пользователя и создаёт для него пустой профиль. Возвращает JWT.</summary>
-    Task<Response<string>> RegisterAsync(RegisterDto dto);
+    /// <summary>
+    /// Регистрирует пользователя, создаёт пустой профиль и сразу открывает сессию: возвращает пару
+    /// токенов (<see cref="AuthResultDto"/>), как логин.
+    /// </summary>
+    Task<Response<AuthResultDto>> RegisterAsync(RegisterDto dto);
 
     /// <summary>
-    /// Проверяет учётные данные. Без 2FA — возвращает JWT-строку в <c>data</c> (контракт базы неизменен).
-    /// При включённой 2FA — вместо токена отдаёт <see cref="TwoFactorRequiredDto"/> (§11).
+    /// Проверяет учётные данные. Без 2FA — создаёт сессию и возвращает пару токенов
+    /// (<see cref="AuthResultDto"/>) в <c>data</c>. При включённой 2FA — вместо токенов отдаёт
+    /// <see cref="TwoFactorRequiredDto"/> (§11); сессия создаётся уже в <see cref="LoginTwoFactorAsync"/>.
     /// </summary>
     Task<Response<object>> LoginAsync(LoginDto dto);
 
-    /// <summary>Завершает вход по второму фактору (TOTP/email/резервный код) и выдаёт JWT (§11).</summary>
-    Task<Response<string>> LoginTwoFactorAsync(Login2FaDto dto);
+    /// <summary>Завершает вход по второму фактору (TOTP/email/резервный код): создаёт сессию и выдаёт пару токенов (§11).</summary>
+    Task<Response<AuthResultDto>> LoginTwoFactorAsync(Login2FaDto dto);
 
     /// <summary>
     /// Включает 2FA для текущего пользователя: генерирует секрет + резервные коды, возвращает

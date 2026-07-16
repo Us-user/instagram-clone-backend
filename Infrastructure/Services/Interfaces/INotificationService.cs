@@ -38,4 +38,12 @@ public interface INotificationService
         NotificationType type,
         NotificationEntityType entityType,
         int? entityId);
+
+    /// <summary>
+    /// Создаёт и пушит уведомление <see cref="NotificationType.NewLogin"/> о новом входе. В отличие от
+    /// <see cref="CreateAsync"/>, не применяет правило «не себе» — это уведомление адресовано самому
+    /// вошедшему пользователю (получатель = инициатор). Вызывается модулем сессий при входе с ранее
+    /// не встречавшегося устройства/IP.
+    /// </summary>
+    Task CreateNewLoginNotificationAsync(string userId);
 }

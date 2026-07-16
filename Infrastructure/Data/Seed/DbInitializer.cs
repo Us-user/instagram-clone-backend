@@ -92,6 +92,42 @@ public static class DbInitializer
             admin.IsVerified = true;
             alice.IsVerified = true;
 
+            // Активные сессии (модуль сессий): демо-сессии для alice, чтобы GET /Session/get-active-sessions
+            // сразу отдавал непустой список. Refresh-токены засеяны только хэшем (plaintext неизвестен —
+            // это нормально: реальные рабочие сессии создаёт логин). Одна десктоп-веб «поновее», одна мобильная.
+            var sessionNow = DateTime.UtcNow;
+            context.UserSessions.AddRange(
+                new UserSession
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = alice.Id,
+                    RefreshTokenHash = BackupCodeHasher.Hash("seed-alice-web"),
+                    DeviceName = "Chrome на Windows",
+                    DeviceType = DeviceType.Web,
+                    Browser = "Chrome",
+                    OS = "Windows",
+                    IpAddress = "203.0.113.10",
+                    Location = "Душанбе, Таджикистан",
+                    CreatedAt = sessionNow.AddDays(-2),
+                    LastActivityAt = sessionNow.AddMinutes(-5),
+                    ExpiresAt = sessionNow.AddDays(28)
+                },
+                new UserSession
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = alice.Id,
+                    RefreshTokenHash = BackupCodeHasher.Hash("seed-alice-mobile"),
+                    DeviceName = "Safari на iPhone",
+                    DeviceType = DeviceType.Mobile,
+                    Browser = "Mobile Safari",
+                    OS = "iOS",
+                    IpAddress = "203.0.113.20",
+                    Location = "Худжанд, Таджикистан",
+                    CreatedAt = sessionNow.AddDays(-5),
+                    LastActivityAt = sessionNow.AddHours(-20),
+                    ExpiresAt = sessionNow.AddDays(25)
+                });
+
             await context.SaveChangesAsync();
 
             // 4. Подписки: alice → admin, bob; bob → alice; carol → alice (все одобренные).
