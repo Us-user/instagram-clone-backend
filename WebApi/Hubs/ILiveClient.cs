@@ -33,6 +33,12 @@ public interface ILiveClient
     /// <summary>Получена заявка в гости — только хосту.</summary>
     Task GuestRequestReceived(LiveGuestRequestDto request);
 
+    /// <summary>
+    /// Заявка в гости одобрена — только заявителю. Несёт <b>Publisher-токен</b> и URL сервера, чтобы
+    /// клиент подключился/переподключился как publisher и включил камеру/микрофон.
+    /// </summary>
+    Task GuestApproved(JoinLiveResultDto result);
+
     /// <summary>Заявка в гости отклонена — только заявителю.</summary>
     Task GuestRequestDeclined(LiveGuestRequestRefDto request);
 

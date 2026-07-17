@@ -41,6 +41,9 @@ public class LiveNotifier : ILiveNotifier
     public Task GuestRequestReceivedAsync(string hostUserId, LiveGuestRequestDto request) =>
         _hub.Clients.User(hostUserId).GuestRequestReceived(request);
 
+    public Task GuestApprovedAsync(string userId, JoinLiveResultDto result) =>
+        _hub.Clients.User(userId).GuestApproved(result);
+
     public Task GuestRequestDeclinedAsync(string userId, int requestId) =>
         _hub.Clients.User(userId).GuestRequestDeclined(new LiveGuestRequestRefDto { RequestId = requestId });
 

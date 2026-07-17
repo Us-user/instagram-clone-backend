@@ -390,9 +390,19 @@ public class LiveStreamService : ILiveStreamService
             await tx.CommitAsync();
         }
 
-        // Повышаем роль у провайдера и оповещаем — после коммита.
+        // Повышаем роль у провайдера (in-place апгрейд прав) — после коммита.
         await _provider.UpdateParticipantRoleAsync(stream.RoomName, request.UserId, ParticipantRole.Publisher);
-        await _notifier.GuestJoinedAsync(stream.Id, await MapUserAsync(request.UserId));
+
+        var guest = await MapUserAsync(request.UserId);
+
+        // Заявителю — адресно свежий Publisher-токен: без него клиент не может публиковать поток (камера
+        // не включится). Работает детерминированно, даже если in-place UpdateParticipant не сработал.
+        var guestToken = await _provider.GenerateTokenAsync(
+            stream.RoomName, request.UserId, guest.UserName, ParticipantRole.Publisher);
+        await _notifier.GuestApprovedAsync(request.UserId, BuildJoinResult(stream, guestToken));
+
+        // Всем в эфире — что появился новый гость (обновить список/показать плитку видео).
+        await _notifier.GuestJoinedAsync(stream.Id, guest);
 
         return new Response<bool>(true);
     }

@@ -34,6 +34,9 @@ public interface ILiveNotifier
     /// <summary>Заявка в гости получена — только хосту.</summary>
     Task GuestRequestReceivedAsync(string hostUserId, LiveGuestRequestDto request);
 
+    /// <summary>Заявка одобрена — только заявителю (Publisher-токен для публикации видео/аудио).</summary>
+    Task GuestApprovedAsync(string userId, JoinLiveResultDto result);
+
     /// <summary>Заявка отклонена — только заявителю.</summary>
     Task GuestRequestDeclinedAsync(string userId, int requestId);
 
