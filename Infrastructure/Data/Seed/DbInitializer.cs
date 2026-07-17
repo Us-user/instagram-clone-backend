@@ -3,6 +3,7 @@ using Domain.Enums;
 using Infrastructure.Common;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -27,6 +28,29 @@ public static class DbInitializer
 
         // 1. Миграции.
         await context.Database.MigrateAsync();
+
+        // 1a. ПОЛНЫЙ сброс: при Seed:ResetAll=true вычищаем ВСЕ данные (все пользователи — включая
+        // реальные и базовые, все посты/рилсы/сторис/сообщения/загрузки), сохраняя схему и историю
+        // миграций. Сиды ниже наполняют базу заново с чистого листа. Нужен, чтобы начисто убрать
+        // старый/битый контент, накопившийся до фиксов. TRUNCATE ... CASCADE снимает проблему порядка
+        // внешних ключей; RESTART IDENTITY сбрасывает счётчики Id. Флаг после прогона обязательно
+        // выключить, иначе база будет обнуляться при КАЖДОМ старте.
+        var config = services.GetRequiredService<IConfiguration>();
+        if (config.GetValue<bool?>("Seed:ResetAll") ?? false)
+        {
+            await context.Database.ExecuteSqlRawAsync(@"
+                DO $$
+                DECLARE r RECORD;
+                BEGIN
+                  FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+                            AND tablename <> '__EFMigrationsHistory') LOOP
+                    EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' RESTART IDENTITY CASCADE';
+                  END LOOP;
+                END $$;");
+            logger.LogWarning(
+                "DbInitializer: ПОЛНЫЙ СБРОС базы (Seed:ResetAll=true) — все данные удалены, наполняем заново. " +
+                "Не забудь выключить флаг после прогона.");
+        }
 
         // 2. Роли.
         foreach (var role in new[] { AdminRole, UserRole })
