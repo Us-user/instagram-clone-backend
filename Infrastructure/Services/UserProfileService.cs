@@ -23,17 +23,20 @@ public class UserProfileService : IUserProfileService
     private readonly ICurrentUserService _currentUser;
     private readonly IFileService _fileService;
     private readonly IValidator<UpdateUserProfileDto> _updateValidator;
+    private readonly IImageUrlBuilder _imageUrls;
 
     public UserProfileService(
         DataContext context,
         ICurrentUserService currentUser,
         IFileService fileService,
-        IValidator<UpdateUserProfileDto> updateValidator)
+        IValidator<UpdateUserProfileDto> updateValidator,
+        IImageUrlBuilder imageUrls)
     {
         _context = context;
         _currentUser = currentUser;
         _fileService = fileService;
         _updateValidator = updateValidator;
+        _imageUrls = imageUrls;
     }
 
     public async Task<Response<GetUserProfileDto>> GetByIdAsync(string? id)
@@ -111,6 +114,7 @@ public class UserProfileService : IUserProfileService
             .ToListAsync();
 
         await MentionEnrichment.EnrichPostsAsync(_context, posts);
+        ImageUrlEnrichment.FillPosts(_imageUrls, posts);
 
         return new PagedResponse<List<GetPostDto>>(posts, total, page, size);
     }
@@ -122,7 +126,9 @@ public class UserProfileService : IUserProfileService
 
         var currentId = _currentUser.GetRequiredUserId();
 
-        var profile = await _context.UserProfiles.FirstOrDefaultAsync(p => p.UserId == currentId)
+        var profile = await _context.UserProfiles
+            .Include(p => p.User)
+            .FirstOrDefaultAsync(p => p.UserId == currentId)
             ?? throw new NotFoundException("Профиль не найден.");
 
         var newFileName = await _fileService.SaveFileAsync(imageFile);
@@ -131,6 +137,11 @@ public class UserProfileService : IUserProfileService
         _fileService.DeleteFile(profile.Image);
 
         profile.Image = newFileName;
+        // Денормализованный User.Avatar — источник аватара для лент, комментов, чатов, поиска и
+        // уведомлений (эти проекции читают именно его). Держим его в синхроне с Image, иначе
+        // загруженное фото видно только на самом профиле, а в остальных местах остаётся пустым.
+        if (profile.User is not null)
+            profile.User.Avatar = newFileName;
         await _context.SaveChangesAsync();
 
         return new Response<string>(newFileName);
@@ -140,7 +151,9 @@ public class UserProfileService : IUserProfileService
     {
         var currentId = _currentUser.GetRequiredUserId();
 
-        var profile = await _context.UserProfiles.FirstOrDefaultAsync(p => p.UserId == currentId)
+        var profile = await _context.UserProfiles
+            .Include(p => p.User)
+            .FirstOrDefaultAsync(p => p.UserId == currentId)
             ?? throw new NotFoundException("Профиль не найден.");
 
         if (string.IsNullOrWhiteSpace(profile.Image))
@@ -148,6 +161,9 @@ public class UserProfileService : IUserProfileService
 
         _fileService.DeleteFile(profile.Image);
         profile.Image = null;
+        // Держим денормализованный User.Avatar в синхроне (его читают ленты/комменты/чаты/поиск).
+        if (profile.User is not null)
+            profile.User.Avatar = null;
         await _context.SaveChangesAsync();
 
         return new Response<bool>(true);
@@ -175,6 +191,7 @@ public class UserProfileService : IUserProfileService
             About = profile.About,
             Gender = profile.Gender,
             Image = profile.Image,
+            ImageUrl = _imageUrls.Build(profile.Image),
             IsPrivate = profile.User.IsPrivate,
             IsVerified = profile.User.IsVerified,
             // Счётчики видны и на приватном чужом профиле (сам контент — через свои эндпоинты).

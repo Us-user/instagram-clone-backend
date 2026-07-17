@@ -26,6 +26,7 @@ public class PostService : IPostService
     private readonly IMentionService _mentions;
     private readonly IValidator<AddPostCommentDto> _commentValidator;
     private readonly IValidator<AddPostFavoriteDto> _favoriteValidator;
+    private readonly IImageUrlBuilder _imageUrls;
 
     public PostService(
         DataContext context,
@@ -35,7 +36,8 @@ public class PostService : IPostService
         IHashtagService hashtags,
         IMentionService mentions,
         IValidator<AddPostCommentDto> commentValidator,
-        IValidator<AddPostFavoriteDto> favoriteValidator)
+        IValidator<AddPostFavoriteDto> favoriteValidator,
+        IImageUrlBuilder imageUrls)
     {
         _context = context;
         _currentUser = currentUser;
@@ -45,6 +47,7 @@ public class PostService : IPostService
         _mentions = mentions;
         _commentValidator = commentValidator;
         _favoriteValidator = favoriteValidator;
+        _imageUrls = imageUrls;
     }
 
     public async Task<PagedResponse<List<GetPostDto>>> GetPostsAsync(
@@ -97,6 +100,7 @@ public class PostService : IPostService
             ?? throw new NotFoundException("Пост не найден.");
 
         await MentionEnrichment.EnrichPostsAsync(_context, new List<GetPostDto> { post });
+        ImageUrlEnrichment.FillPosts(_imageUrls, new[] { post });
 
         return new Response<GetPostDto>(post);
     }
@@ -112,6 +116,7 @@ public class PostService : IPostService
             .ToListAsync();
 
         await MentionEnrichment.EnrichPostsAsync(_context, posts);
+        ImageUrlEnrichment.FillPosts(_imageUrls, posts);
 
         return new Response<List<GetPostDto>>(posts);
     }
@@ -174,6 +179,7 @@ public class PostService : IPostService
             .FirstAsync();
 
         await MentionEnrichment.EnrichPostsAsync(_context, new List<GetPostDto> { result });
+        ImageUrlEnrichment.FillPosts(_imageUrls, new[] { result });
 
         return new Response<GetPostDto>(result);
     }
@@ -525,6 +531,7 @@ public class PostService : IPostService
             .ToListAsync();
 
         await MentionEnrichment.EnrichPostsAsync(_context, posts);
+        ImageUrlEnrichment.FillPosts(_imageUrls, posts);
 
         return new PagedResponse<List<GetPostDto>>(posts, total, page, size);
     }

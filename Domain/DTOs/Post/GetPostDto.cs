@@ -15,10 +15,22 @@ public class GetPostDto
     public string UserName { get; set; } = string.Empty;
     public string? UserImage { get; set; }
 
+    /// <summary>
+    /// Абсолютный URL аватара автора (готовая ссылка в дополнение к имени файла <see cref="UserImage"/>).
+    /// Необязательное поле — контракт с именами файлов не ломается.
+    /// </summary>
+    public string? UserImageUrl { get; set; }
+
     /// <summary>Верифицирован ли автор поста («синяя галочка», §10).</summary>
     public bool IsVerified { get; set; }
 
     public List<string> Images { get; set; } = new();
+
+    /// <summary>
+    /// Абсолютные URL картинок поста (готовые ссылки в дополнение к именам файлов в <see cref="Images"/>).
+    /// Необязательное поле — существующий контракт не меняется.
+    /// </summary>
+    public List<string> ImagesUrl { get; set; } = new();
 
     public int LikeCount { get; set; }
     public int CommentCount { get; set; }

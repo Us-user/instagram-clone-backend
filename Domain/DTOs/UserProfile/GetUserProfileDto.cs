@@ -13,6 +13,12 @@ public class GetUserProfileDto
     public Gender Gender { get; set; }
     public string? Image { get; set; }
 
+    /// <summary>
+    /// Абсолютный URL изображения профиля (готовая ссылка в дополнение к имени файла <see cref="Image"/>).
+    /// Необязательное поле — контракт с именем файла не ломается.
+    /// </summary>
+    public string? ImageUrl { get; set; }
+
     public int PostCount { get; set; }
     public int FollowersCount { get; set; }
     public int FollowingCount { get; set; }

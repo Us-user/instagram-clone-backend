@@ -53,6 +53,8 @@ public static class DependencyInjection
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IFileService, FileService>();
+        // Строит абсолютные URL картинок из имён файлов для необязательных *Url-полей DTO.
+        services.AddScoped<IImageUrlBuilder, ImageUrlBuilder>();
         services.AddScoped<ITotpService, TotpService>();
 
         // Модуль сессий (access + refresh): управление сессиями, определение устройства и геолокация.
