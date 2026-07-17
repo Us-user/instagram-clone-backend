@@ -27,3 +27,18 @@ services:
         generateValue: true
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
+      # ── Прямые эфиры (LiveKit) ───────────────────────────────────────────────
+      # Локально ключи лежат в user-secrets, но они работают только в Development —
+      # здесь окружение Production, поэтому значения задаются переменными.
+      # sync: false — Render спросит значение в дашборде и НЕ сохранит его в этот файл
+      # (репозиторий публичный, ApiSecret в него попасть не должен).
+      # Если их не задать, провайдер откатится на Fake: токены будут фиктивными,
+      # видео не заработает (в логах при старте будет предупреждение).
+      - key: Streaming__Provider
+        value: LiveKit
+      - key: Streaming__LiveKit__Url
+        sync: false
+      - key: Streaming__LiveKit__ApiKey
+        sync: false
+      - key: Streaming__LiveKit__ApiSecret
+        sync: false

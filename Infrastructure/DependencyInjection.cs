@@ -111,6 +111,9 @@ public static class DependencyInjection
             services.AddScoped<ILiveWebhookValidator, FakeLiveWebhookValidator>();
         }
 
+        // Сообщает при старте, какой провайдер активен: фолбэк на Fake иначе проходит незаметно.
+        services.AddHostedService<StreamingStartupLogger>();
+
         services.AddScoped<ILiveStreamService, LiveStreamService>();
         // Эфемерное in-memory состояние эфиров (как presence/typing-трекеры): привязка соединений к эфиру
         // (грейс-период при обрыве) и троттлинг сердечек/комментариев.
