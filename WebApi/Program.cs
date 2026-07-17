@@ -140,4 +140,20 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Демо-данные для ручного тестирования (~20 пользователей с постами/рилсами/сторис). Идемпотентно
+// и за флагом Seed:DemoData (по умолчанию — только в Development). Best-effort: сбой наполнения не
+// мешает работе API — логируем и продолжаем. Отдельный scope: не смешиваем с обязательными миграциями.
+using (var scope = app.Services.CreateScope())
+{
+    var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+    try
+    {
+        await DemoDataSeeder.SeedAsync(scope.ServiceProvider);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Не удалось наполнить демо-данными (пропущено, API продолжает работу).");
+    }
+}
+
 await app.WaitForShutdownAsync();
