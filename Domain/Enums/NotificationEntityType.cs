@@ -9,5 +9,8 @@ public enum NotificationEntityType
     Post = 0,
     Comment = 1,
     Story = 2,
-    User = 3
+    User = 3,
+
+    /// <summary>Прямой эфир (модуль эфиров).</summary>
+    LiveStream = 4
 }

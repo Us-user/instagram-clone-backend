@@ -58,6 +58,13 @@ public class DataContext : IdentityDbContext<User, IdentityRole, string>
 
     public DbSet<UserSession> UserSessions => Set<UserSession>();
 
+    public DbSet<LiveStream> LiveStreams => Set<LiveStream>();
+    public DbSet<LiveViewer> LiveViewers => Set<LiveViewer>();
+    public DbSet<LiveComment> LiveComments => Set<LiveComment>();
+    public DbSet<LiveLike> LiveLikes => Set<LiveLike>();
+    public DbSet<LiveGuestRequest> LiveGuestRequests => Set<LiveGuestRequest>();
+    public DbSet<LiveBan> LiveBans => Set<LiveBan>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);

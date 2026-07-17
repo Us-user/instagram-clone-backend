@@ -32,6 +32,7 @@ builder.Services.AddScoped<INotificationNotifier, NotificationNotifier>();
 builder.Services.AddScoped<IGroupChatNotifier, GroupChatNotifier>();
 builder.Services.AddScoped<IPresenceNotifier, PresenceNotifier>();
 builder.Services.AddScoped<ITypingNotifier, TypingNotifier>();
+builder.Services.AddScoped<ILiveNotifier, LiveNotifier>();
 
 // JWT-аутентификация + авторизация (все эндпоинты защищены по умолчанию).
 builder.Services.AddJwtAuthentication(builder.Configuration);
@@ -99,6 +100,7 @@ app.MapHub<ChatHub>("/chatHub");
 app.MapHub<NotificationHub>("/notificationHub");
 app.MapHub<GroupChatHub>("/groupChatHub");
 app.MapHub<PresenceHub>("/presenceHub");
+app.MapHub<LiveHub>("/liveHub");
 
 // ── Старт: сначала биндим порт, потом миграции ────────────────────────────────
 // КРИТИЧНО для PaaS (Render): порт нужно забиндить и поднять /health раньше, чем гонять

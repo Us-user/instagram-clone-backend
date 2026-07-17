@@ -281,8 +281,13 @@ public static class DbInitializer
                     CreatedAt = DateTime.UtcNow.AddMinutes(-15)
                 });
 
+            // 9. Прямые эфиры (модуль эфиров): завершённый эфир alice (зрители/комменты/лайки/гость —
+            //    наполняет get-my-streams/get-stats) и активный эфир bob (виден alice в get-active, т.к.
+            //    alice подписана на bob). Строятся графом — FK проставятся на общем SaveChanges.
+            SeedLiveStreams(context, alice, bob, carol, admin);
+
             await context.SaveChangesAsync();
-            logger.LogInformation("Seed: тестовые пользователи, подписки, посты, хэштеги, упоминания, уведомления, группа, личный чат, реакции, сторис, близкие друзья, ответ на сторис и репост поста созданы");
+            logger.LogInformation("Seed: тестовые пользователи, подписки, посты, хэштеги, упоминания, уведомления, группа, личный чат, реакции, сторис, близкие друзья, ответ на сторис, репост поста и прямые эфиры созданы");
         }
 
         // 7. Справочник локаций.
@@ -654,6 +659,75 @@ public static class DbInitializer
 
         context.Stories.AddRange(storyAll, storyCf);
         return (storyAll, storyCf);
+    }
+
+    /// <summary>
+    /// Демо-эфиры (модуль эфиров). Завершённый эфир alice со зрителями (bob/carol/admin), комментариями,
+    /// «сердечками» и одобренной заявкой гостя (bob) — даёт данные для <c>get-my-streams</c>/<c>get-stats</c>.
+    /// Активный эфир bob (аудитория All, один активный зритель alice) — виден alice в <c>get-active</c>.
+    /// Счётчики денормализованы под фактические записи. Граф добавляется в контекст; Id — на общем SaveChanges.
+    /// </summary>
+    private static void SeedLiveStreams(DataContext context, User alice, User bob, User carol, User admin)
+    {
+        var now = DateTime.UtcNow;
+
+        // Завершённый эфир alice.
+        var aliceStream = new LiveStream
+        {
+            UserId = alice.Id,
+            Title = "Вечерний стрим: рисуем закат",
+            RoomName = $"live_{Guid.NewGuid():N}",
+            Status = LiveStreamStatus.Ended,
+            Audience = LiveStreamAudience.All,
+            StartedAt = now.AddHours(-3),
+            EndedAt = now.AddHours(-2),
+            ViewersPeak = 3,
+            ViewersTotal = 3,
+            CommentsCount = 2,
+            LikesCount = 5,
+            Viewers =
+            {
+                new LiveViewer { UserId = bob.Id, JoinedAt = now.AddHours(-3), LeftAt = now.AddHours(-2).AddMinutes(-5), WatchDurationSeconds = 3300 },
+                new LiveViewer { UserId = carol.Id, JoinedAt = now.AddMinutes(-170), LeftAt = now.AddMinutes(-130), WatchDurationSeconds = 2400 },
+                new LiveViewer { UserId = admin.Id, JoinedAt = now.AddMinutes(-160), LeftAt = now.AddMinutes(-140), WatchDurationSeconds = 1200 }
+            },
+            Comments =
+            {
+                new LiveComment { UserId = bob.Id, Text = "Огонь! 🔥", CreatedAt = now.AddMinutes(-165), IsPinned = true },
+                new LiveComment { UserId = admin.Id, Text = "Очень красиво!", CreatedAt = now.AddMinutes(-150) }
+            },
+            Likes =
+            {
+                new LiveLike { UserId = bob.Id, CreatedAt = now.AddMinutes(-164) },
+                new LiveLike { UserId = bob.Id, CreatedAt = now.AddMinutes(-163) },
+                new LiveLike { UserId = carol.Id, CreatedAt = now.AddMinutes(-155) },
+                new LiveLike { UserId = admin.Id, CreatedAt = now.AddMinutes(-152) },
+                new LiveLike { UserId = admin.Id, CreatedAt = now.AddMinutes(-151) }
+            },
+            GuestRequests =
+            {
+                new LiveGuestRequest { UserId = bob.Id, Status = LiveGuestRequestStatus.Approved, RequestedAt = now.AddMinutes(-168), RespondedAt = now.AddMinutes(-167) }
+            }
+        };
+
+        // Активный эфир bob с одним текущим зрителем (alice).
+        var bobStream = new LiveStream
+        {
+            UserId = bob.Id,
+            Title = "Прогулка по городу",
+            RoomName = $"live_{Guid.NewGuid():N}",
+            Status = LiveStreamStatus.Live,
+            Audience = LiveStreamAudience.All,
+            StartedAt = now.AddMinutes(-10),
+            ViewersPeak = 1,
+            ViewersTotal = 1,
+            Viewers =
+            {
+                new LiveViewer { UserId = alice.Id, JoinedAt = now.AddMinutes(-8) }
+            }
+        };
+
+        context.LiveStreams.AddRange(aliceStream, bobStream);
     }
 
     /// <summary>

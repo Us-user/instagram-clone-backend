@@ -1,0 +1,23 @@
+# Конфигурация self-hosted LiveKit для локальной разработки (используется docker-compose.livekit.yml).
+# ВНИМАНИЕ: ключи ниже — только для локали. Для продакшена замените на собственные секреты (>= 32 символов).
+
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+
+# API-ключи: имя_ключа: секрет. Должны совпадать со Streaming:LiveKit:ApiKey / ApiSecret в appsettings.
+keys:
+  devkey: devsecret_change_me_at_least_32_chars_long
+
+# Вебхуки: LiveKit будет слать события на бэкенд. Подпись проверяется по этому же ключу (LiveKitWebhookValidator).
+# host.docker.internal указывает из контейнера на хост-машину (Windows/Mac). apiKey — какой ключ подписывает вебхуки.
+webhook:
+  api_key: devkey
+  urls:
+    - http://host.docker.internal:5030/Live/webhook
+
+logging:
+  level: info

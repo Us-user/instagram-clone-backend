@@ -5,6 +5,7 @@ using Infrastructure.Mapping;
 using Infrastructure.Options;
 using Infrastructure.Services;
 using Infrastructure.Services.Interfaces;
+using Infrastructure.Services.Streaming;
 using Infrastructure.Validators.Account;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -87,6 +88,36 @@ public static class DependencyInjection
         services.AddScoped<ITypingService, TypingService>();
         services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<IExploreService, ExploreService>();
+
+        // ── Модуль эфиров (Live Streaming) ────────────────────────────────────────────
+        // Параметры провайдера + выбор реализации по конфигу. Провайдер LiveKit включается, только когда
+        // выбран явно И заданы ключи/URL — иначе (в т.ч. локально) работает Fake-заглушка, чтобы бизнес-
+        // логику эфиров можно было проверять без реального WebRTC. Валидатор вебхуков идёт в паре с провайдером.
+        var streamingSection = configuration.GetSection(StreamingOptions.SectionName);
+        services.Configure<StreamingOptions>(streamingSection);
+        var streaming = streamingSection.Get<StreamingOptions>() ?? new StreamingOptions();
+        var useLiveKit = string.Equals(streaming.Provider, "LiveKit", StringComparison.OrdinalIgnoreCase)
+                         && !string.IsNullOrWhiteSpace(streaming.LiveKit.ApiKey)
+                         && !string.IsNullOrWhiteSpace(streaming.LiveKit.ApiSecret)
+                         && !string.IsNullOrWhiteSpace(streaming.LiveKit.Url);
+        if (useLiveKit)
+        {
+            services.AddScoped<IStreamingProvider, LiveKitStreamingProvider>();
+            services.AddScoped<ILiveWebhookValidator, LiveKitWebhookValidator>();
+        }
+        else
+        {
+            services.AddScoped<IStreamingProvider, FakeStreamingProvider>();
+            services.AddScoped<ILiveWebhookValidator, FakeLiveWebhookValidator>();
+        }
+
+        services.AddScoped<ILiveStreamService, LiveStreamService>();
+        // Эфемерное in-memory состояние эфиров (как presence/typing-трекеры): привязка соединений к эфиру
+        // (грейс-период при обрыве) и троттлинг сердечек/комментариев.
+        services.AddSingleton<ILiveConnectionTracker, LiveConnectionTracker>();
+        services.AddSingleton<ILiveRateLimiter, LiveRateLimiter>();
+        // Фоновое автозавершение «висящих» эфиров.
+        services.AddHostedService<LiveStreamCleanupService>();
 
         // Presence/typing (§1): состояние присутствия и «печатает…» — эфемерное, живёт в памяти
         // между всеми соединениями, поэтому singleton (реализация SignalR-рассылки — в WebApi).

@@ -1,0 +1,35 @@
+# Опциональный self-hosted LiveKit для локальной разработки модуля прямых эфиров.
+# Видео (WebRTC) идёт напрямую между клиентом и этим сервером, минуя бэкенд — бэкенд лишь
+# раздаёт токены доступа и ведёт бизнес-логику эфиров.
+#
+# Запуск:   docker compose -f docker-compose.livekit.yml up -d
+# Остановка: docker compose -f docker-compose.livekit.yml down
+#
+# Затем в appsettings.json (или через переменные окружения) выставить:
+#   "Streaming": {
+#     "Provider": "LiveKit",
+#     "LiveKit": {
+#       "Url": "ws://localhost:7880",
+#       "ApiKey": "devkey",
+#       "ApiSecret": "devsecret_change_me_at_least_32_chars_long",
+#       "TokenLifetimeMinutes": 360
+#     }
+#   }
+#
+# Ключи ниже — только для локальной разработки. Для продакшена используйте LiveKit Cloud
+# (https://cloud.livekit.io) или сгенерируйте собственные секреты.
+
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --config /etc/livekit.yaml --node-ip 127.0.0.1
+    restart: unless-stopped
+    ports:
+      - "7880:7880"       # HTTP / WebSocket сигналинг + Server API
+      - "7881:7881"       # TCP для WebRTC (fallback)
+      - "50000-50100:50000-50100/udp"  # диапазон RTP/RTCP (WebRTC-медиа)
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+
+  # Приём вебхуков (participant_joined/left, room_finished, …) требует, чтобы LiveKit мог достучаться
+  # до вашего бэкенда по адресу webhook.urls в livekit.yaml (напр. http://host.docker.internal:5030/Live/webhook).

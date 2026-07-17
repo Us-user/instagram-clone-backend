@@ -55,6 +55,38 @@ SignalR (чат, групповые чаты, уведомления, presence/t
   входе отзывается самая старая сессия. `LifetimeMinutes` — легаси-поле, больше не используется.
 - Для локальной разработки переопределения можно вынести в `WebApi/appsettings.Development.json`.
 
+### Прямые эфиры (Live Streaming)
+Модуль эфиров использует внешний WebRTC-сервер **LiveKit**. Видео идёт **напрямую** между клиентом и
+LiveKit, минуя бэкенд; бэкенд лишь раздаёт токены доступа (роль по бизнес-логике) и ведёт всю логику
+(эфиры, доступ, зрители, комменты, гости, статистика). Секция `Streaming` в `appsettings.json`:
+
+```jsonc
+"Streaming": {
+  "Provider": "Fake",            // "LiveKit" (прод) или "Fake" (dev/тесты без видео)
+  "LiveKit": {
+    "Url": "wss://your-project.livekit.cloud",
+    "ApiKey": "…",
+    "ApiSecret": "…",            // клиенту НИКОГДА не отдаётся — только сгенерированный токен
+    "TokenLifetimeMinutes": 360
+  },
+  "MaxGuests": 3,                 // до 3 гостей одновременно (всего 4 участника с хостом)
+  "MaxCommentLength": 200
+}
+```
+
+- **Fake** (по умолчанию) — заглушка: возвращает фиктивные токены, комнатой не управляет. Позволяет
+  проверять бизнес-логику эфиров без реального WebRTC. LiveKit включается, только когда `Provider=LiveKit`
+  **и** заданы `Url`/`ApiKey`/`ApiSecret` (иначе автоматически используется Fake).
+- **LiveKit Cloud**: зарегистрируйтесь на <https://cloud.livekit.io>, создайте проект и возьмите
+  `Url`/`ApiKey`/`ApiSecret` из его настроек.
+- **Self-hosted (локально)**: `docker compose -f docker-compose.livekit.yml up -d` (конфиг — `livekit.yaml`),
+  затем `Url: "ws://localhost:7880"`, `ApiKey: "devkey"`, `ApiSecret: "devsecret_change_me_at_least_32_chars_long"`.
+  Один и тот же код работает и с Cloud, и с self-hosted — меняются только `Url` и ключи.
+- **Вебхуки**: LiveKit шлёт события на `POST /Live/webhook` (анонимный, но с **обязательной проверкой
+  подписи** по `ApiSecret`). Синхронизируют состояние (напр. автозавершение по `room_finished`).
+
+Схема потоков: `видео: клиент ↔ LiveKit` (WebRTC) · `логика: клиент ↔ бэкенд` (REST + SignalR `/liveHub`).
+
 ## Запуск
 ```bash
 dotnet build
@@ -366,6 +398,39 @@ Presence взаимна: если у запрашивающего выключе
 | GET | `get-feed` | `?pageNumber&pageSize` (персональная лента по интересам) |
 | GET | `get-popular` | `?pageNumber&pageSize` (cold start — популярное) |
 
+### Live — `/Live`  (прямые эфиры; видео через LiveKit, SignalR `/liveHub`)
+| Метод | Путь | Параметры / тело | Кто |
+|---|---|---|---|
+| POST | `start` | `{ title?, audience? }` → `{ streamId, roomName, token, serverUrl }` | хост |
+| POST | `end` | `?streamId` → итоговая статистика | хост |
+| PUT | `update-title` | `?streamId` + `{ title }` | хост |
+| GET | `get-active` | `?pageNumber&pageSize` (эфиры подписок) | зритель |
+| GET | `get-stream-by-id` | `?streamId` | зритель |
+| POST | `join` | `?streamId` → `{ token, serverUrl }` (Subscriber) | зритель |
+| POST | `leave` | `?streamId` | зритель |
+| POST | `request-guest` | `?streamId` | зритель |
+| DELETE | `cancel-guest-request` | `?streamId` | зритель |
+| GET | `get-guest-requests` | `?streamId` (Pending) | хост |
+| POST | `approve-guest` | `?requestId` (проверка лимита `MaxGuests`) | хост |
+| POST | `decline-guest` | `?requestId` | хост |
+| POST | `remove-guest` | `?streamId&userId` | хост |
+| GET | `get-active-guests` | `?streamId` | зритель |
+| POST | `add-comment` | `?streamId` + `{ text }` | зритель |
+| DELETE | `delete-comment` | `?commentId` (автор/хост) | — |
+| POST | `pin-comment` | `?commentId` | хост |
+| GET | `get-comments` | `?streamId&pageNumber&pageSize` | зритель |
+| POST | `send-like` | `?streamId` (сердечко, троттлинг) | зритель |
+| POST | `ban-viewer` | `?streamId&userId` | хост |
+| DELETE | `unban-viewer` | `?streamId&userId` | хост |
+| GET | `get-viewers` | `?streamId&pageNumber&pageSize` | хост |
+| GET | `get-stats` | `?streamId` (live / после эфира) | хост |
+| GET | `get-my-streams` | `?pageNumber&pageSize` | хост |
+| POST | `save-to-story` | `?streamId` (если есть запись) | хост |
+| POST | `webhook` | тело LiveKit + подпись 🔓 `[AllowAnonymous]` | LiveKit |
+
+Токены генерирует **только бэкенд**, роль (Publisher/Subscriber) — по бизнес-логике; все проверки
+доступа (аудитория/приватность/блокировки/бан/лимит гостей) выполняются на сервере **до** выдачи токена.
+
 ## SignalR — реальное время
 Все хабы требуют JWT. WebSocket не шлёт заголовок `Authorization`, поэтому токен передаётся
 query-параметром `access_token`, например `ws://localhost:<port>/chatHub?access_token=<JWT>`.
@@ -376,6 +441,7 @@ query-параметром `access_token`, например `ws://localhost:<por
 | `/groupChatHub` | Групповые чаты, typing | `ReceiveMessage`, `ReceiveReaction`, `GroupTyping` |
 | `/notificationHub` | Уведомления (live «звоночек») | `ReceiveNotification` |
 | `/presenceHub` | Онлайн-статусы | `ReceivePresence` |
+| `/liveHub` | Прямые эфиры (группа `live_{streamId}`) | `NewComment`, `NewLike`, `ViewerJoined/Left`, `ViewerCount`, `GuestRequestReceived`, `GuestJoined/Left`, `CommentPinned/Deleted`, `ViewerBanned`, `StreamStarted/Ended` |
 
 - Личный `PUT /Chat/send-message` / голосовое → `ReceiveMessage(GetMessageDto)` обоим участникам.
 - Групповое сообщение (обычное и системное) → `ReceiveMessage` всем участникам группы.
@@ -398,6 +464,10 @@ query-параметром `access_token`, например `ws://localhost:<por
 - **Верификация** (§10): `isVerified` во всех author-DTO, админ-эндпоинты.
 - **2FA** (§11): TOTP (RFC 6238) + email-код + backup-коды.
 - **Explore** (§12): content-based рекомендации без ML (профиль интересов на лету).
+- **Прямые эфиры** (Live): интеграция с LiveKit (провайдер `IStreamingProvider`: LiveKit + Fake),
+  токены доступа с ролью Publisher/Subscriber генерирует бэкенд; гости (лимит + очередь), комментарии
+  и «сердечки» с троттлингом, модерация (бан/кик), статистика (live + после эфира), вебхуки с проверкой
+  подписи, фоновое автозавершение висящих эфиров; real-time через `/liveHub` (группа `live_{streamId}`).
 
 ## Рабочий процесс
 Проект ведётся сессиями: `/start` продолжает работу по роадмапу, `/stop` фиксирует изменения.

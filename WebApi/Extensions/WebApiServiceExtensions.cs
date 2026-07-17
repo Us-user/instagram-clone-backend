@@ -54,7 +54,8 @@ public static class WebApiServiceExtensions
                         var isHubPath = path.StartsWithSegments("/chatHub")
                                         || path.StartsWithSegments("/notificationHub")
                                         || path.StartsWithSegments("/groupChatHub")
-                                        || path.StartsWithSegments("/presenceHub");
+                                        || path.StartsWithSegments("/presenceHub")
+                                        || path.StartsWithSegments("/liveHub");
                         if (!string.IsNullOrEmpty(accessToken) && isHubPath)
                             context.Token = accessToken;
                         return Task.CompletedTask;

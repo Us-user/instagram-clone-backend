@@ -37,5 +37,11 @@ public enum NotificationType
     PostShared = 9,
 
     /// <summary>Новый вход в аккаунт с ранее не встречавшегося устройства/IP (модуль сессий).</summary>
-    NewLogin = 10
+    NewLogin = 10,
+
+    /// <summary>Пользователь, на которого вы подписаны, начал прямой эфир (модуль эфиров).</summary>
+    LiveStarted = 11,
+
+    /// <summary>Зритель просит выйти к вам в эфир гостем — только хосту (модуль эфиров).</summary>
+    LiveGuestRequest = 12
 }

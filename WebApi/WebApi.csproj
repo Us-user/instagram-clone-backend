@@ -10,6 +10,7 @@
     <!-- XML-комментарии для Swagger. 1591 — не ругаться на отсутствие комментариев. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+    <UserSecretsId>8a52b0a2-e520-4e69-ba2f-b0e55c38ed6b</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
