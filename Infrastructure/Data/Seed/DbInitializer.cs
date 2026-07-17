@@ -1,11 +1,14 @@
+using CloudinaryDotNet;
 using Domain.Entities;
 using Domain.Enums;
 using Infrastructure.Common;
+using Infrastructure.Options;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Infrastructure.Data.Seed;
 
@@ -29,14 +32,18 @@ public static class DbInitializer
         // 1. Миграции.
         await context.Database.MigrateAsync();
 
-        // 1a. ПОЛНЫЙ сброс: при Seed:ResetAll=true вычищаем ВСЕ данные (все пользователи — включая
-        // реальные и базовые, все посты/рилсы/сторис/сообщения/загрузки), сохраняя схему и историю
-        // миграций. Сиды ниже наполняют базу заново с чистого листа. Нужен, чтобы начисто убрать
-        // старый/битый контент, накопившийся до фиксов. TRUNCATE ... CASCADE снимает проблему порядка
-        // внешних ключей; RESTART IDENTITY сбрасывает счётчики Id. Флаг после прогона обязательно
-        // выключить, иначе база будет обнуляться при КАЖДОМ старте.
+        // 1a. Сброс данных. Управляется двумя флагами:
+        //   • Seed:ResetAll  — вычистить ВСЕ данные и наполнить заново стандартным сидом.
+        //   • Seed:AdminOnly — «под ноль»: вычистить ВСЕ данные И все ассеты Cloudinary, оставить
+        //     ТОЛЬКО аккаунт admin (ни демо, ни alice/bob/… , ни постов) — чистый продакшн-старт.
+        // Оба сохраняют схему и историю миграций; TRUNCATE ... CASCADE снимает проблему порядка FK,
+        // RESTART IDENTITY сбрасывает счётчики Id. После прогона флаг ОБЯЗАТЕЛЬНО выключить, иначе
+        // база будет обнуляться при КАЖДОМ старте.
         var config = services.GetRequiredService<IConfiguration>();
-        if (config.GetValue<bool?>("Seed:ResetAll") ?? false)
+        var resetAll = config.GetValue<bool?>("Seed:ResetAll") ?? false;
+        var adminOnly = config.GetValue<bool?>("Seed:AdminOnly") ?? false;
+
+        if (resetAll || adminOnly)
         {
             await context.Database.ExecuteSqlRawAsync(@"
                 DO $$
@@ -48,9 +55,13 @@ public static class DbInitializer
                   END LOOP;
                 END $$;");
             logger.LogWarning(
-                "DbInitializer: ПОЛНЫЙ СБРОС базы (Seed:ResetAll=true) — все данные удалены, наполняем заново. " +
-                "Не забудь выключить флаг после прогона.");
+                "DbInitializer: сброс базы ({Flag}) — все данные удалены. Не забудь выключить флаг после прогона.",
+                adminOnly ? "Seed:AdminOnly" : "Seed:ResetAll");
         }
+
+        // «Под ноль» ещё и в облаке: чистим все загруженные ассеты Cloudinary (best-effort).
+        if (adminOnly)
+            await PurgeCloudinaryAsync(services, logger);
 
         // 2. Роли.
         foreach (var role in new[] { AdminRole, UserRole })
@@ -68,6 +79,14 @@ public static class DbInitializer
             var admin = await CreateUserAsync(context, userManager, logger,
                 "admin", "Администратор", "admin@instaclone.dev", "Admin123!", Gender.Male,
                 "Главный администратор системы.", new[] { AdminRole, UserRole });
+
+            // Режим «под ноль»: оставляем ТОЛЬКО admin — остальной сид (пользователи, посты,
+            // explore-контент, локации) пропускаем. Логин: admin / Admin123!.
+            if (adminOnly)
+            {
+                logger.LogWarning("DbInitializer: режим Seed:AdminOnly — создан только admin, остальной сид пропущен.");
+                return;
+            }
 
             var alice = await CreateUserAsync(context, userManager, logger,
                 "alice", "Alice Walker", "alice@instaclone.dev", "User123!", Gender.Female,
@@ -326,6 +345,57 @@ public static class DbInitializer
 
             await context.SaveChangesAsync();
             logger.LogInformation("Seed: справочник локаций заполнен");
+        }
+    }
+
+    /// <summary>
+    /// Полностью удаляет все загруженные ассеты из папки Cloudinary приложения (типы image/video/raw,
+    /// с пагинацией по next_cursor). Best-effort: если Cloudinary не сконфигурирован или API недоступен —
+    /// логируем и продолжаем, старт не роняем. Вызывается только в режиме Seed:AdminOnly.
+    /// </summary>
+    private static async Task PurgeCloudinaryAsync(IServiceProvider services, ILogger logger)
+    {
+        var cloudinary = services.GetService<Cloudinary>();
+        if (cloudinary is null)
+        {
+            logger.LogInformation("DbInitializer: Cloudinary не сконфигурирован — очистка ассетов пропущена.");
+            return;
+        }
+
+        var options = services.GetRequiredService<IOptions<CloudinaryOptions>>().Value;
+        var prefix = (string.IsNullOrWhiteSpace(options.Folder) ? "instaclone" : options.Folder.Trim('/')) + "/";
+
+        try
+        {
+            var total = 0;
+            var types = new[]
+            {
+                CloudinaryDotNet.Actions.ResourceType.Image,
+                CloudinaryDotNet.Actions.ResourceType.Video,
+                CloudinaryDotNet.Actions.ResourceType.Raw
+            };
+            foreach (var type in types)
+            {
+                string? cursor = null;
+                do
+                {
+                    var result = await cloudinary.DeleteResourcesAsync(new CloudinaryDotNet.Actions.DelResParams
+                    {
+                        Prefix = prefix,
+                        ResourceType = type,
+                        NextCursor = cursor
+                    });
+                    total += result.Deleted?.Count ?? 0;
+                    cursor = result.Partial ? result.NextCursor : null;
+                }
+                while (!string.IsNullOrEmpty(cursor));
+            }
+
+            logger.LogWarning("DbInitializer: Cloudinary — удалено {Count} ассетов из папки '{Prefix}'.", total, prefix);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "DbInitializer: не удалось очистить Cloudinary (пропущено, продолжаем).");
         }
     }
 

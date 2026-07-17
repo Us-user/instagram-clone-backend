@@ -32,6 +32,13 @@ public static class DemoDataSeeder
         var config = services.GetRequiredService<IConfiguration>();
         var env = services.GetRequiredService<IWebHostEnvironment>();
 
+        // Режим «под ноль» (Seed:AdminOnly): база должна остаться с одним admin — демо не сидим.
+        if (config.GetValue<bool?>("Seed:AdminOnly") ?? false)
+        {
+            logger.LogInformation("DemoDataSeeder: пропущен (режим Seed:AdminOnly).");
+            return;
+        }
+
         var enabled = config.GetValue<bool?>("Seed:DemoData") ?? env.IsDevelopment();
         if (!enabled)
         {
