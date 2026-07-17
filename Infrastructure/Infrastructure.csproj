@@ -32,6 +32,10 @@
          которую транзитивно тянет ASP.NET Core 8.0.11 JwtBearer в WebApi — без конфликта версий. -->
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.1.2" />
     <PackageReference Include="UAParser" Version="3.1.47" />
+    <!-- Внешнее объектное хранилище для загруженных файлов (картинки постов/рилсов, аватары,
+         сторис, файлы сообщений, голосовые). Нужно на PaaS с эфемерным диском (Render free):
+         локальный wwwroot стирается при каждом рестарте/редеплое, поэтому файлы уходят в Cloudinary. -->
+    <PackageReference Include="CloudinaryDotNet" Version="1.29.2" />
   </ItemGroup>
 
   <ItemGroup>

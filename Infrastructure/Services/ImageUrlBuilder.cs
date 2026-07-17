@@ -29,11 +29,21 @@ public class ImageUrlBuilder : IImageUrlBuilder
         if (string.IsNullOrWhiteSpace(fileName))
             return null;
 
+        // Внешнее хранилище (Cloudinary) кладёт в БД уже готовый абсолютный URL — отдаём как есть.
+        // Дисковые/демо-значения — это имена файлов, к ним достраиваем /images/<имя>.
+        if (IsAbsoluteUrl(fileName))
+            return fileName;
+
         var baseUrl = ResolveBase();
         return baseUrl is null
             ? $"/{Folder}/{fileName}"
             : $"{baseUrl}/{Folder}/{fileName}";
     }
+
+    private static bool IsAbsoluteUrl(string value) =>
+        value.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+        || value.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+        || value.StartsWith("//", StringComparison.Ordinal);
 
     public List<string> BuildMany(IEnumerable<string>? fileNames) =>
         fileNames is null

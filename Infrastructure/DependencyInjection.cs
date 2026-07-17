@@ -53,7 +53,30 @@ public static class DependencyInjection
         // Сквозные сервисы.
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
-        services.AddScoped<IFileService, FileService>();
+
+        // Хранилище загруженных файлов. Cloudinary включается, только когда заданы все ключи —
+        // это нужно на PaaS с эфемерным диском (Render free): локальный wwwroot стирается при
+        // каждом рестарте/редеплое, поэтому картинки постов/рилсов/аватары/сторис уходят во
+        // внешнее хранилище (в БД — готовый абсолютный URL). Без ключей (локальная разработка)
+        // работает дисковый FileService в wwwroot/images. Клиент URL получает одинаково — через
+        // IImageUrlBuilder, который абсолютные ссылки Cloudinary отдаёт как есть.
+        var cloudinarySection = configuration.GetSection(CloudinaryOptions.SectionName);
+        services.Configure<CloudinaryOptions>(cloudinarySection);
+        var cloudinaryOptions = cloudinarySection.Get<CloudinaryOptions>() ?? new CloudinaryOptions();
+        if (cloudinaryOptions.IsConfigured)
+        {
+            services.AddSingleton(new CloudinaryDotNet.Cloudinary(new CloudinaryDotNet.Account(
+                cloudinaryOptions.CloudName, cloudinaryOptions.ApiKey, cloudinaryOptions.ApiSecret)));
+            services.AddScoped<IFileService, CloudinaryFileService>();
+        }
+        else
+        {
+            services.AddScoped<IFileService, FileService>();
+        }
+
+        // Сообщает при старте, какое хранилище активно: тихий фолбэк на эфемерный диск иначе не заметен.
+        services.AddHostedService<StorageStartupLogger>();
+
         // Строит абсолютные URL картинок из имён файлов для необязательных *Url-полей DTO.
         services.AddScoped<IImageUrlBuilder, ImageUrlBuilder>();
         services.AddScoped<ITotpService, TotpService>();

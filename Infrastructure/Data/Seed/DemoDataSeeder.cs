@@ -45,20 +45,32 @@ public static class DemoDataSeeder
 
         var personas = Personas;
 
+        // Папка для SVG-плейсхолдеров (как в FileService: WebRootPath или ContentRoot/wwwroot).
+        var webRoot = env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot");
+        var imagesFolder = Path.Combine(webRoot, "images");
+        Directory.CreateDirectory(imagesFolder);
+
+        // Одноразовый сброс: при Seed:ResetDemoData=true сносим ВСЕ сидовые демо-данные (пользователи-
+        // персоны и весь их контент — БД каскадно уносит посты/сторис/лайки/подписки и т.д.) вместе со
+        // старыми SVG, чтобы ниже наполнить заново. Реальные/базовые аккаунты не трогаем. После первого
+        // редеплоя флаг нужно выключить, иначе демо будет пересоздаваться на каждом старте.
+        var reset = config.GetValue<bool?>("Seed:ResetDemoData") ?? false;
+        if (reset)
+            await ResetDemoDataAsync(context, imagesFolder, logger);
+
         // Маркер идемпотентности: если первый демо-пользователь уже есть — считаем, что сид отработал.
+        // SVG-плейсхолдеры демо при этом всё равно перегенерируем: на PaaS с эфемерным диском (Render
+        // free) wwwroot стирается при рестарте, а сам сид пропускается (данные в БД остались) — без
+        // перегенерации демо-картинки пропали бы. Файлы детерминированы, восстанавливаем их из БД.
         if (await userManager.FindByNameAsync(personas[0].Handle) is not null)
         {
-            logger.LogInformation("DemoDataSeeder: демо-данные уже присутствуют — пропуск.");
+            await EnsureDemoAssetsAsync(context, imagesFolder);
+            logger.LogInformation("DemoDataSeeder: демо-данные уже есть — SVG перегенерированы, сид пропущен.");
             return;
         }
 
         if (!await roleManager.RoleExistsAsync(DbInitializer.UserRole))
             await roleManager.CreateAsync(new IdentityRole(DbInitializer.UserRole));
-
-        // Папка для SVG-плейсхолдеров (как в FileService: WebRootPath или ContentRoot/wwwroot).
-        var webRoot = env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot");
-        var imagesFolder = Path.Combine(webRoot, "images");
-        Directory.CreateDirectory(imagesFolder);
 
         // Детерминированный ГПСЧ — стабильные объёмы/распределения между запусками на чистой БД.
         var rnd = new Random(20260716);
@@ -261,6 +273,108 @@ public static class DemoDataSeeder
     }
 
     // ───────────────────────── helpers ─────────────────────────
+
+    /// <summary>
+    /// Полностью сносит сидовые демо-данные для чистого пересоздания: удаляет пользователей-персон
+    /// (по <see cref="Persona.Handle"/>), а БД каскадно уносит весь их контент — посты/рилсы с
+    /// картинками, лайки/комменты/просмотры/избранное, сторис, подписки, уведомления, профили и т.п.
+    /// (все связи к <c>User</c> настроены как Cascade). Базовые/реальные аккаунты не затрагиваются.
+    /// Денормализованный <c>PostsCount</c> хэштегов пересчитывается по факту, а старые демо-SVG удаляются
+    /// с диска (наполнение перезапишет их под теми же именами). Идемпотентно: без демо-юзеров — no-op.
+    /// </summary>
+    private static async Task ResetDemoDataAsync(DataContext context, string imagesFolder, ILogger logger)
+    {
+        var handles = Personas.Select(p => p.Handle).ToArray();
+        var demoUserIds = await context.Users
+            .Where(u => handles.Contains(u.UserName))
+            .Select(u => u.Id)
+            .ToListAsync();
+
+        if (demoUserIds.Count == 0)
+        {
+            logger.LogInformation("DemoDataSeeder: сброс запрошен, но демо-пользователей нет — пропуск.");
+            return;
+        }
+
+        var removed = await context.Users
+            .Where(u => demoUserIds.Contains(u.Id))
+            .ExecuteDeleteAsync();
+
+        // Демо-посты ушли — пересчитываем PostsCount по оставшимся связям, чтобы после повторного
+        // наполнения (которое снова инкрементит счётчики) значения не задвоились.
+        var hashtags = await context.Hashtags.ToListAsync();
+        foreach (var h in hashtags)
+            h.PostsCount = await context.PostHashtags.CountAsync(ph => ph.HashtagId == h.Id);
+        await context.SaveChangesAsync();
+
+        // Старые демо-SVG с диска (перегенерируются при наполнении под теми же именами).
+        if (Directory.Exists(imagesFolder))
+            foreach (var file in Directory.EnumerateFiles(imagesFolder, "demo-*.svg").ToList())
+                File.Delete(file);
+
+        logger.LogInformation(
+            "DemoDataSeeder: сброс демо — удалено {Users} пользователей и весь их контент, счётчики хэштегов пересчитаны.",
+            removed);
+    }
+
+    /// <summary>
+    /// Перегенерирует детерминированные SVG-плейсхолдеры демо-данных на диск, восстанавливая их из
+    /// того, что уже есть в БД (по префиксам <c>demo-ava-</c>/<c>demo-post-</c>/<c>demo-story-</c>).
+    /// Вызывается на каждом старте, когда сид пропущен: на PaaS с эфемерным диском wwwroot стирается
+    /// при рестарте, а имена файлов в БД остаются — так демо-картинки не исчезают. Реальные (не демо)
+    /// загрузки живут во внешнем хранилище и здесь не участвуют. Пишем только отсутствующие файлы.
+    /// </summary>
+    private static async Task EnsureDemoAssetsAsync(DataContext context, string imagesFolder)
+    {
+        Directory.CreateDirectory(imagesFolder);
+        var personaByHandle = Personas.ToDictionary(p => p.Handle, StringComparer.OrdinalIgnoreCase);
+
+        // Аватары.
+        var avatars = await context.Users
+            .Where(u => u.Avatar != null && u.Avatar.StartsWith("demo-ava-"))
+            .Select(u => new { u.UserName, u.FullName, u.Avatar })
+            .ToListAsync();
+        foreach (var a in avatars)
+            WriteIfMissing(imagesFolder, a.Avatar!,
+                () => DemoAssets.Avatar(a.UserName ?? string.Empty, Initials(a.FullName ?? string.Empty)));
+
+        // Обложки постов и рилсов.
+        var posts = await context.PostImages
+            .Where(pi => pi.ImageName.StartsWith("demo-post-"))
+            .Select(pi => new { pi.ImageName, pi.Post!.IsReel, pi.Post.Title, Handle = pi.Post.User!.UserName })
+            .ToListAsync();
+        foreach (var p in posts)
+        {
+            var emoji = p.Handle != null && personaByHandle.TryGetValue(p.Handle, out var persona)
+                ? persona.Emoji : "📷";
+            var caption = p.Title ?? string.Empty;
+            WriteIfMissing(imagesFolder, p.ImageName, () => p.IsReel
+                ? DemoAssets.Reel(p.ImageName, emoji, caption)
+                : DemoAssets.Post(p.ImageName, emoji, caption));
+        }
+
+        // Сторис.
+        var stories = await context.Stories
+            .Where(s => s.FileName != null && s.FileName.StartsWith("demo-story-"))
+            .Select(s => new { s.FileName, Handle = s.User!.UserName, s.User.FullName })
+            .ToListAsync();
+        foreach (var s in stories)
+        {
+            var text = s.Handle != null && personaByHandle.TryGetValue(s.Handle, out var persona)
+                       && persona.Captions.Length > 0
+                ? persona.Captions[0]
+                : s.FullName ?? string.Empty;
+            WriteIfMissing(imagesFolder, s.FileName!,
+                () => DemoAssets.Story(s.FileName!, s.Handle ?? string.Empty, text));
+        }
+    }
+
+    /// <summary>Пишет SVG на диск, только если файла с таким именем ещё нет (свежий/эфемерный диск).</summary>
+    private static void WriteIfMissing(string imagesFolder, string fileName, Func<string> svgFactory)
+    {
+        if (!File.Exists(Path.Combine(imagesFolder, fileName)))
+            DemoAssets.Write(imagesFolder, fileName, svgFactory());
+    }
 
     private sealed record DemoUser(User Entity, Persona Persona)
     {
